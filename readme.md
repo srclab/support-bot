@@ -2,19 +2,20 @@
 
 ### Установка
 
-```sh
+```
  $ composer require vsesdal/support-bot
+
  $ php artisan vendor:publish --provider="Vsesdal\SupportBot\SupportBotServiceProvider"
- ```
+```
 
 При использовании режима с очердями сообещений необходимой выполнить миграции
 и добавить задачу в крон (более подробно в разделе Настройка).
 Опционально можно изменить дефолтное название создаваемой таблицы в бд
 в конфигурационном файле support_bot.php.
 
-```sh
+```
  $ php artisan migrate
- ```
+```
 
 ### Настройка
 

@@ -3,7 +3,6 @@
     "description": "Бот тех.поддержки для автоответа на популярные фразы клиентов",
     "type": "library",
     "license": "Private",
-    "minimum-stability": "stable",
     "require": {
         "php": ">=7.0.0"
     },
