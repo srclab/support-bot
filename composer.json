@@ -1,0 +1,25 @@
+{
+    "name": "vsesdal/support-bot",
+    "description": "Бот тех.поддержки для автоответа на популярные фразы клиентов",
+    "type": "library",
+    "license": "Private",
+    "minimum-stability": "stable",
+    "require": {
+        "php": ">=7.0.0"
+    },
+    "autoload": {
+        "psr-4": {
+            "Vsesdal\\SupportBot\\": "src/"
+        }
+    },
+    "extra": {
+        "laravel": {
+            "providers": [
+                "Vsesdal\\SupportBot\\SupportBotServiceProvider"
+            ]
+        }
+    },
+    "require-dev": {
+        "laravel/framework": "^5.7"
+    }
+}
