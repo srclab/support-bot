@@ -124,7 +124,15 @@ class SupportBot
     {
         $answers = $this->config['auto_answers'];
 
-        return $answers[$case] ?? '';
+        foreach ($answers as $question => $answer) {
+
+            if(preg_match('/'.$question.'/i', $case)) {
+                return $answer;
+            }
+
+        }
+
+        return '';
     }
 
 }
