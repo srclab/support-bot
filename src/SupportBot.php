@@ -3,6 +3,7 @@
 namespace Vsesdal\SupportBot;
 
 use Illuminate\Support\Facades\Log;
+use Vsesdal\SupportBot\Contracts\OnlineConsultant;
 
 class SupportBot
 
@@ -29,7 +30,7 @@ class SupportBot
     {
         $this->config = config('support_bot');
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
-        $this->online_consultant = app(\Vsesdal\SupportBot\Contracts\OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
+        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
     }
 
     /**
@@ -52,6 +53,14 @@ class SupportBot
          */
         if(empty($data['message'])) {
             Log::error('[Vsesdal\SupportBot] Сообщение не получено.', $data);
+            return;
+        }
+
+        /**
+         * Проверка наличия оператора.
+         */
+        if(empty($data['operator']['login'])) {
+            Log::error('[Vsesdal\SupportBot] Не найден оператор.', $data);
             return;
         }
 

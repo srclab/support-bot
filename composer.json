@@ -5,7 +5,9 @@
     "license": "Private",
     "minimum-stability": "stable",
     "require": {
-        "php": ">=7.0.0"
+        "php": ">=7.0.0",
+        "ext-json": "*",
+        "ext-curl": "*"
     },
     "autoload": {
         "psr-4": {

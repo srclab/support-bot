@@ -22,4 +22,12 @@ interface OnlineConsultant
      */
     public function checkSecret($request_secret);
 
+    /**
+     * Получение списка сообщений за период.
+     *
+     * @param array $period
+     * @return array
+     */
+    public function getMessages(array $period);
+
 }

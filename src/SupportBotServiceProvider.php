@@ -7,13 +7,6 @@ use Illuminate\Support\ServiceProvider;
 class SupportBotServiceProvider extends ServiceProvider
 {
     /**
-     * Indicates if loading of the provider is deferred.
-     *
-     * @var bool
-     */
-    protected $defer = true;
-
-    /**
      * Bootstrap any application services.
      *
      * @return void
@@ -46,19 +39,7 @@ class SupportBotServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->bind( \Vsesdal\SupportBot\Contracts\OnlineConsultant::class, \Vsesdal\SupportBot\SupportBot::class);
-    }
-
-    /**
-     * Get the services provided by the provider.
-     *
-     * @return array
-     */
-    public function provides()
-    {
-        return [
-            'Vsesdal\SupportBot\Contracts\OnlineConsultant',
-        ];
+        $this->app->singleton(\Vsesdal\SupportBot\Contracts\OnlineConsultant::class, \Vsesdal\SupportBot\Services\TalkMe::class);
     }
 
 }

@@ -3,9 +3,9 @@
 namespace Vsesdal\SupportBot;
 
 use Illuminate\Http\Request;
-use App\Http\Controllers\Controller;
+use Illuminate\Routing\Controller as BaseController;
 
-class SupportBotController extends Controller
+class SupportBotController extends BaseController
 {
     /**
      * @var \Illuminate\Http\Request
@@ -38,7 +38,7 @@ class SupportBotController extends Controller
 
         if (!empty($post_data)) {
             $post_data = json_decode($post_data, true);
-            app(\Vsesdal\SupportBot\Contracts\SupportBot::class)->processWebhook($post_data);
+            app(\Vsesdal\SupportBot\SupportBot::class)->processWebhook($post_data);
         }
     }
 }
