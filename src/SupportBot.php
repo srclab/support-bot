@@ -65,6 +65,18 @@ class SupportBot
         }
 
         /**
+         * Проверка фильтра пользователей по id на сайте.
+         */
+        $only_user_ids = config('support_bot.enabled_for_user_ids');
+
+        if(!empty($only_user_ids)
+            && (empty($data['client']['customData']['user_id'])
+                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
+        ) {
+            return;
+        }
+
+        /**
          * Формирование автоответа.
          */
         $answer = $this->getAnswer($data['message']['text']);
