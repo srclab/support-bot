@@ -43,7 +43,6 @@ class SupportAutoAnsweringRepository
     {
         return $this->query()
             ->where('created_at', '<', Carbon::now()->subSecond(config('support_bot.answering_delay')))
-            ->orderBy('id', 'desc')
             ->limit(50)
             ->get();
     }
