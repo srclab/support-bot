@@ -138,7 +138,7 @@ class SupportBot
 
         foreach ($answers as $question => $answer) {
 
-            if(preg_match('/'.$question.'/i', $case)) {
+            if(preg_match('/'.$question.'/iu', $case)) {
                 return $answer;
             }
 
