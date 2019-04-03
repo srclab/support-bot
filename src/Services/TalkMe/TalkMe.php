@@ -2,6 +2,7 @@
 
 namespace Vsesdal\SupportBot\Services;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Vsesdal\SupportBot\Contracts\OnlineConsultant;
 
@@ -30,12 +31,12 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
-     * Получение списка сообщений за период.
+     * Получение списка сообщений.
      *
-     * @param array $period
+     * @param array $filter
      * @return array
      */
-    public function getMessages(array $period)
+    public function getMessages(array $filter)
     {
         /**
          * Фомирование временных рамок в нужном формате.
@@ -43,16 +44,19 @@ class TalkMe implements OnlineConsultant
          * @var \Carbon\Carbon $date_start
          * @var \Carbon\Carbon $date_end
          */
-        $date_start = $period[0];
-        $date_end = $period[1];
+        $date_start = $filter['period'][0] ?? Carbon::now()->startOfDay();
+        $date_end = $filter['period'][1] ?? Carbon::now();
+
+        /**
+         * Основные параметры запроса, если они были переданы.
+         */
+        $data = array_except($filter, 'period');
 
         if($date_end->diffInDays($date_start) <= 14) {
 
-            $data = [
-                'dateRange' => [
-                  'start' => $date_start->toDateString(),
-                  'stop' => $date_end->toDateString(),
-                ],
+            $data['dateRange'] = [
+                'start' => $date_start->toDateString(),
+                'stop' => $date_end->toDateString(),
             ];
 
             $messages = $this->sendRequest('message', $data);
@@ -65,11 +69,9 @@ class TalkMe implements OnlineConsultant
 
             do {
 
-                $data = [
-                    'dateRange' => [
-                        'start' => $date_start->toDateString(),
-                        'stop' => $date_end->toDateString(),
-                    ],
+                $data['dateRange'] = [
+                    'start' => $date_start->toDateString(),
+                    'stop' => $date_end->toDateString(),
                 ];
 
                 $result = $this->sendRequest('message', $data);
