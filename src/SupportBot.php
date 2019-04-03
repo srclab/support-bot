@@ -2,6 +2,7 @@
 
 namespace Vsesdal\SupportBot;
 
+use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use Vsesdal\SupportBot\Contracts\OnlineConsultant;
 
@@ -40,6 +41,13 @@ class SupportBot
      */
     public function processWebhook(array $data)
     {
+        /**
+         * Проверка периода активности бота.
+         */
+        if(!$this->checkActivePeriod()) {
+            return;
+        }
+
         /**
          * Проверка секретки.
          */
@@ -91,8 +99,6 @@ class SupportBot
         } else {
             $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], $answer);
         }
-
-        //Log::info("[Vsesdal\SupportBot] Сформирован автоответ. {$data['message']['text']} => {$answer}");
     }
 
     /**
@@ -118,8 +124,6 @@ class SupportBot
         foreach ($messages as $message) {
             $this->online_consultant->sendMessage($message->client_id, $message->message, $message->operator);
         }
-
-        //Log::info("[Vsesdal\SupportBot] Отправлено {$messages->count()} автоответов.");
     }
 
     //****************************************************************
@@ -145,6 +149,37 @@ class SupportBot
         }
 
         return '';
+    }
+
+    /**
+     * Проверка периода автивности.
+     */
+    protected function checkActivePeriod()
+    {
+        /**
+         * Получение установленного периода.
+         */
+        $period = $this->config['active_period'];
+
+        /**
+         * Если период не задан, то бот активен.
+         */
+        if(empty($period)) {
+            return true;
+        }
+
+        /**
+         * Парсинг времени.
+         */
+        try {
+            $day_beginning = Carbon::createFromFormat('H:i', $period['day_beginning']);
+            $day_end = Carbon::createFromFormat('H:i', $period['day_end']);
+        } catch (\Throwable $e) {
+            Log::error('[Vsesdal\SupportBot] Ошибка парсинга дат.', [$e]);
+            return true;
+        }
+
+        return Carbon::now()->between($day_beginning, $day_end);
     }
 
 }
