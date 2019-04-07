@@ -132,12 +132,26 @@ class SupportBot
         /**
          * Добавление приветствия, если автоответ сформирован и это не приветствие.
          */
-        if(!empty($result_answer) && $result_answer != $this->config['greeting_phrase']) {
+        if(!empty($result_answer)) {
 
             /**
-             * Сегодня еще не здоровались.
+             * Сегодня уже здоровались.
              */
-            if(!$this->alreadySaidHello($data)) {
+            $already_said_hello = $this->alreadySaidHello($data);
+
+            $answer_is_greeting = $result_answer == $this->config['greeting_phrase'];
+
+            /**
+             * Если получена фраза приветствия и уже здоровались, то ничего отвечать не нужно.
+             */
+            if($already_said_hello && $answer_is_greeting) {
+                return '';
+            }
+
+            /**
+             * Если сегодня еще не здоровались и это не фраза приветствия, добавление приветствия в начало фразы.
+             */
+            if(!$already_said_hello && !$answer_is_greeting) {
                 $result_answer = $this->config['greeting_phrase'] . "\n\n" . $result_answer;
             }
 
