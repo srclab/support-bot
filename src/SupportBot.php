@@ -129,32 +129,35 @@ class SupportBot
 
         }
 
+        if(empty($result_answer)) {
+            return $result_answer;
+        }
+
         /**
-         * Добавление приветствия, если автоответ сформирован и это не приветствие.
+         * Добавление приветствия, если автоответ сформирован
+         * и это не приветствие или ответ из исключающего массива.
          */
-        if(!empty($result_answer)) {
 
-            /**
-             * Сегодня уже здоровались.
-             */
-            $already_said_hello = $this->alreadySaidHello($data);
+        /**
+         * Сегодня уже здоровались.
+         */
+        $already_said_hello = $this->alreadySaidHello($data);
 
-            $answer_is_greeting = $result_answer == $this->config['greeting_phrase'];
+        $answer_is_greeting = $result_answer == $this->config['greeting_phrase'];
 
-            /**
-             * Если получена фраза приветствия и уже здоровались, то ничего отвечать не нужно.
-             */
-            if($already_said_hello && $answer_is_greeting) {
-                return '';
-            }
+        /**
+         * Если получена фраза приветствия и уже здоровались, то ничего отвечать не нужно.
+         */
+        if($already_said_hello && $answer_is_greeting) {
+            return '';
+        }
 
-            /**
-             * Если сегодня еще не здоровались и это не фраза приветствия, добавление приветствия в начало фразы.
-             */
-            if(!$already_said_hello && !$answer_is_greeting) {
-                $result_answer = $this->config['greeting_phrase'] . "\n\n" . $result_answer;
-            }
-
+        /**
+         * Если сегодня еще не здоровались и это не фраза приветствия или ответ из исключающего массива,
+         * добавление приветствия в начало фразы.
+         */
+        if(!$already_said_hello && !$answer_is_greeting && !in_array($result_answer, $this->config['answers_without_greeting'])) {
+            $result_answer = $this->config['greeting_phrase'] . "\n\n" . $result_answer;
         }
 
         return $result_answer;
