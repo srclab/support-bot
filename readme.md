@@ -3,9 +3,9 @@
 ### Установка
 
 ```
- $ composer require vsesdal/support-bot
+ $ composer require srclab/support-bot
 
- $ php artisan vendor:publish --provider="Vsesdal\SupportBot\SupportBotServiceProvider"
+ $ php artisan vendor:publish --provider="SrcLab\SupportBot\SupportBotServiceProvider"
 ```
 
 При использовании режима с очердями сообещений необходимой выполнить миграции

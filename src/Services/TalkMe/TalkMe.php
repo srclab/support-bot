@@ -1,10 +1,10 @@
 <?php
 
-namespace Vsesdal\SupportBot\Services;
+namespace SrcLab\SupportBot\Services;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-use Vsesdal\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\SupportBot\Contracts\OnlineConsultant;
 
 class TalkMe implements OnlineConsultant
 {

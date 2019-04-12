@@ -1,6 +1,6 @@
 <?php
 
-namespace Vsesdal\SupportBot;
+namespace SrcLab\SupportBot;
 
 use Illuminate\Database\Eloquent\Model;
 

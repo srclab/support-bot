@@ -9,7 +9,7 @@ return [
      |
      |
      */
-    'enabled' => env('VSESDAL_SUPPORT_BOT_ENABLED', true),
+    'enabled' => env('SRCLAB_SUPPORT_BOT_ENABLED', true),
 
     /*
      |--------------------------------------------------------------------------
@@ -39,7 +39,7 @@ return [
      | sync - мгновенная отправка ответа
      | queue - отправка ответа с задержкой
      |
-     | Режим queue требует добавление задачи в крон с выполнением метода \Vsesdal\SupportBot\SupportBot::sendAnswers
+     | Режим queue требует добавление задачи в крон с выполнением метода \SrcLab\SupportBot\SupportBot::sendAnswers
      | раз в минуту.
      |
      */
@@ -91,9 +91,9 @@ return [
     'accounts' => [
 
         'talk_me' => [
-            'api_token' => env('VSESDAL_SUPPORT_BOT_TALK_ME_API_TOKEN', ''),
-            'webhook_secret' => env('VSESDAL_SUPPORT_BOT_TALK_ME_WEBHOOK_SECRET', ''),
-            'default_operator' => env('VSESDAL_SUPPORT_BOT_TALK_ME_DEFAULT_OPERATOR', ''),
+            'api_token' => env('SRCLAB_SUPPORT_BOT_TALK_ME_API_TOKEN', ''),
+            'webhook_secret' => env('SRCLAB_SUPPORT_BOT_TALK_ME_WEBHOOK_SECRET', ''),
+            'default_operator' => env('SRCLAB_SUPPORT_BOT_TALK_ME_DEFAULT_OPERATOR', ''),
         ],
 
     ],

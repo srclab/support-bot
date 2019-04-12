@@ -1,6 +1,6 @@
 <?php
 
-namespace Vsesdal\SupportBot;
+namespace SrcLab\SupportBot;
 
 use Illuminate\Support\ServiceProvider;
 
@@ -39,7 +39,7 @@ class SupportBotServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->singleton(\Vsesdal\SupportBot\Contracts\OnlineConsultant::class, \Vsesdal\SupportBot\Services\TalkMe::class);
+        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, \SrcLab\SupportBot\Services\TalkMe::class);
     }
 
 }

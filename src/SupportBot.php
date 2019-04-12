@@ -1,21 +1,21 @@
 <?php
 
-namespace Vsesdal\SupportBot;
+namespace SrcLab\SupportBot;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
-use Vsesdal\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\SupportBot\Contracts\OnlineConsultant;
 
 class SupportBot
 
 {
     /**
-     * @var \Vsesdal\SupportBot\SupportAutoAnsweringRepository
+     * @var \SrcLab\SupportBot\SupportAutoAnsweringRepository
      */
     protected $messages_repository;
 
     /**
-     * @var \Vsesdal\SupportBot\Contracts\OnlineConsultant
+     * @var \SrcLab\SupportBot\Contracts\OnlineConsultant
      */
     protected $online_consultant;
 
@@ -189,7 +189,7 @@ class SupportBot
             $day_beginning = Carbon::createFromFormat('H:i', $period['day_beginning']);
             $day_end = Carbon::createFromFormat('H:i', $period['day_end']);
         } catch (\Throwable $e) {
-            Log::error('[Vsesdal\SupportBot] Ошибка парсинга дат.', [$e]);
+            Log::error('[SrcLab\SupportBot] Ошибка парсинга дат.', [$e]);
             return true;
         }
 
@@ -208,7 +208,7 @@ class SupportBot
          * Проверка секретки.
          */
         if(!$this->online_consultant->checkSecret($data['secretKey'] ?? null)) {
-            Log::warning('[Vsesdal\SupportBot] Получен неверный секретный ключ.', $data);
+            Log::warning('[SrcLab\SupportBot] Получен неверный секретный ключ.', $data);
             return false;
         }
 
@@ -216,7 +216,7 @@ class SupportBot
          * Проверка наличия сообщения.
          */
         if(empty($data['message'])) {
-            Log::error('[Vsesdal\SupportBot] Сообщение не получено.', $data);
+            Log::error('[SrcLab\SupportBot] Сообщение не получено.', $data);
             return false;
         }
 
@@ -224,7 +224,7 @@ class SupportBot
          * Проверка наличия оператора.
          */
         if(empty($data['operator']['login'])) {
-            Log::error('[Vsesdal\SupportBot] Не найден оператор.', $data);
+            Log::error('[SrcLab\SupportBot] Не найден оператор.', $data);
             return false;
         }
 

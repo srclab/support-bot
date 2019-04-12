@@ -1,8 +1,8 @@
 <?php
 
-namespace Vsesdal\SupportBot;
+namespace SrcLab\SupportBot;
 
-use Vsesdal\SupportBot\SupportAutoAnsweringModel as SupportAutoAnsweringModel;
+use SrcLab\SupportBot\SupportAutoAnsweringModel as SupportAutoAnsweringModel;
 use Carbon\Carbon;
 
 class SupportAutoAnsweringRepository

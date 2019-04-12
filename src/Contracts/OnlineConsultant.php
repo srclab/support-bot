@@ -1,6 +1,6 @@
 <?php
 
-namespace Vsesdal\SupportBot\Contracts;
+namespace SrcLab\SupportBot\Contracts;
 
 interface OnlineConsultant
 {

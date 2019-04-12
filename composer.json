@@ -1,5 +1,5 @@
 {
-    "name": "vsesdal/support-bot",
+    "name": "srclab/support-bot",
     "description": "Бот тех.поддержки для автоответа на популярные фразы клиентов",
     "type": "library",
     "license": "Private",
@@ -11,13 +11,13 @@
     },
     "autoload": {
         "psr-4": {
-            "Vsesdal\\SupportBot\\": "src/"
+            "SrcLab\\SupportBot\\": "src/"
         }
     },
     "extra": {
         "laravel": {
             "providers": [
-                "Vsesdal\\SupportBot\\SupportBotServiceProvider"
+                "SrcLab\\SupportBot\\SupportBotServiceProvider"
             ]
         }
     },

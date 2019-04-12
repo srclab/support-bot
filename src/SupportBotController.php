@@ -1,6 +1,6 @@
 <?php
 
-namespace Vsesdal\SupportBot;
+namespace SrcLab\SupportBot;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
@@ -38,7 +38,7 @@ class SupportBotController extends BaseController
 
         if (!empty($post_data)) {
             $post_data = json_decode($post_data, true);
-            app(\Vsesdal\SupportBot\SupportBot::class)->processWebhook($post_data);
+            app(\SrcLab\SupportBot\SupportBot::class)->processWebhook($post_data);
         }
     }
 }
