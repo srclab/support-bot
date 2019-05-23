@@ -5,6 +5,7 @@ namespace SrcLab\SupportBot;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use Throwable;
 
 class SupportBot
 
@@ -73,6 +74,12 @@ class SupportBot
         } else {
             $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], $answer);
         }
+
+        /**
+         * Увеличение счетчика отправленных сообщений для статистики.
+         */
+        $this->sentMessagesAnalyse();
+
     }
 
     /**
@@ -188,7 +195,7 @@ class SupportBot
         try {
             $day_beginning = Carbon::createFromFormat('H:i', $period['day_beginning']);
             $day_end = Carbon::createFromFormat('H:i', $period['day_end']);
-        } catch (\Throwable $e) {
+        } catch (Throwable $e) {
             Log::error('[SrcLab\SupportBot] Ошибка парсинга дат.', [$e]);
             return true;
         }
@@ -294,6 +301,61 @@ class SupportBot
         $cache->set($cache_key, 1, now()->endOfDay());
 
         return false;
+    }
+
+    /**
+     * Увеличение счетчика отправленных сообщений для статистики.
+     */
+    protected function sentMessagesAnalyse()
+    {
+        try {
+
+            /**
+             * Анализ сообщений отключен.
+             */
+            if (!$this->config['sent_messages_analyse']['enabled']) {
+                return;
+            }
+
+            /**
+             * Получение данных из кеша.
+             * @var \Illuminate\Contracts\Cache\Repository $cache
+             */
+            $cache = app('cache');
+            $cache_key = 'SupportBot:SentMessagesByDays';
+
+            $data = $cache->get($cache_key, []);
+
+            /**
+             * Проход по дням, удаление старой информации.
+             */
+            if (!empty($data)) {
+
+                $date_border = now()->subDays($this->config['sent_messages_analyse']['cache_days'])->toDateString();
+
+                foreach ($data as $date => $count) {
+                    if ($date < $date_border) {
+                        unset($data[$date]);
+                    }
+                }
+
+            }
+
+            /**
+             * Инкремент счетчика текущего дня.
+             */
+            $current_date = now()->toDateString();
+
+            $data[$current_date] = ($data[$current_date] ?? 0) + 1;
+
+            /**
+             * Сохранение данных.
+             */
+            $cache->set($cache_key, $data);
+
+        } catch (Throwable $e) {
+            Log::error('[SrcLab\SupportBot] Ошибка анализатора отправленных сообщений');
+        }
     }
 
 }
