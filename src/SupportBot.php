@@ -107,6 +107,69 @@ class SupportBot
         }
     }
 
+    /**
+     * Получение накопленной статистики по количеству отправленных сообщений.
+     *
+     * @return array
+     */
+    public function getSentMessagesStatistic()
+    {
+        /** @var \Illuminate\Contracts\Cache\Repository $cache */
+        $cache = app('cache');
+        $cache_key = 'SupportBot:SentMessagesByDays';
+        $cache_days = $this->config['sent_messages_analyse']['cache_days'];
+
+        /**
+         * Получение количества отправленных ботом сообщений по дням.
+         */
+        $data = $cache->get($cache_key, []);
+
+        if(empty($data)) {
+            return $data;
+        }
+
+        /**
+         * Получение чатов за последние N дней (количество дней хранимых в кеше).
+         */
+        $cache_days = $cache_days > 14 ? 14 : $cache_days;
+
+        $filter = [
+            'period' => [now()->subDays($cache_days-1)->startOfDay(), Carbon::now()->endOfDay()],
+        ];
+
+        $messages = $this->online_consultant->getMessages($filter);
+
+        if(empty($messages)) {
+            Log::error('[SrcLab\SupportBot] Не удалось получить сообщения для составления статистики отпраки.');
+            return [];
+        }
+
+        /**
+         * Подсчет и добавление общего количества сообщений от менеджеров по дням.
+         */
+        $messages = array_reduce(array_pluck($messages, 'messages'), 'array_merge', []);
+
+        $messages = collect($messages);
+
+        $messages = $messages->where('whoSend', 'operator');
+
+        $messages_by_days = $messages->groupBy(function ($value, $key) {
+            return Carbon::parse($value['dateTime'])->toDateString();
+        });
+
+        $result_data = [];
+
+        foreach ($data as $date => $count) {
+            $result_data[] = [
+                'date' => $date,
+                'total' => count($messages_by_days[$date] ?? []),
+                'from_bot' => $count,
+            ];
+        }
+
+        return $result_data;
+    }
+
     //****************************************************************
     //************************** Support *****************************
     //****************************************************************
