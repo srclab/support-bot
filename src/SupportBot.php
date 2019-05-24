@@ -386,6 +386,7 @@ class SupportBot
              */
             $cache = app('cache');
             $cache_key = 'SupportBot:SentMessagesByDays';
+            $cache_days = $this->config['sent_messages_analyse']['cache_days'];
 
             $data = $cache->get($cache_key, []);
 
@@ -394,7 +395,7 @@ class SupportBot
              */
             if (!empty($data)) {
 
-                $date_border = now()->subDays($this->config['sent_messages_analyse']['cache_days'])->toDateString();
+                $date_border = now()->subDays($cache_days)->toDateString();
 
                 foreach ($data as $date => $count) {
                     if ($date < $date_border) {
@@ -414,7 +415,7 @@ class SupportBot
             /**
              * Сохранение данных.
              */
-            $cache->set($cache_key, $data);
+            $cache->set($cache_key, $data, now()->addDays($cache_days));
 
         } catch (Throwable $e) {
             Log::error('[SrcLab\SupportBot] Ошибка анализатора отправленных сообщений');
