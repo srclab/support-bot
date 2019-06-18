@@ -27,13 +27,6 @@ class SupportBotController extends BaseController
      */
     public function support_bot()
     {
-        /**
-         * Если бот отключен.
-         */
-        if(!config('support_bot.enabled')) {
-            return;
-        }
-
         $post_data = $this->request->getContent();
 
         if (!empty($post_data)) {
