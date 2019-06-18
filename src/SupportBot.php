@@ -44,6 +44,20 @@ class SupportBot
     public function processWebhook(array $data)
     {
         /**
+         * Автоответчик.
+         */
+        if($this->autoResponder($data)) {
+            return;
+        }
+
+        /**
+         * Бот отключен.
+         */
+        if(!$this->config['enabled']) {
+            return;
+        }
+
+        /**
          * Проверка периода активности бота.
          */
         if(!$this->checkActivePeriod()) {
@@ -67,13 +81,9 @@ class SupportBot
         }
 
         /**
-         * Добавление ответа в очередь на отправку или мгновенная отправка на основании текущего редима работы.
+         * Отправка сообщения.
          */
-        if($this->config['answering_mode'] == 'sync') {
-            $this->online_consultant->sendMessage($data['client']['clientId'], $answer, $data['operator']['login']);
-        } else {
-            $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], $answer);
-        }
+        $this->sendMessage($data['client']['clientId'], $answer, $data['operator']['login']);
 
         /**
          * Увеличение счетчика отправленных сообщений для статистики.
@@ -420,6 +430,73 @@ class SupportBot
         } catch (Throwable $e) {
             Log::error('[SrcLab\SupportBot] Ошибка анализатора отправленных сообщений');
         }
+    }
+
+    /**
+     * Добавление ответа в очередь на отправку или мгновенная отправка на основании текущего режима работы.
+     *
+     * @param int $client_id
+     * @param string $message
+     * @param string $operator
+     */
+    protected function sendMessage($client_id, $message, $operator)
+    {
+        if($this->config['answering_mode'] == 'sync') {
+            $this->online_consultant->sendMessage($client_id, $message, $operator);
+        } else {
+            $this->messages_repository->addRecord($client_id, $operator, $message);
+        }
+    }
+
+    /**
+     * Автоответчик.
+     *
+     * @param array $data
+     * @return bool
+     */
+    protected function autoResponder(array $data)
+    {
+        /**
+         * Автоответчик выключен.
+         */
+        $auto_responder_config = $this->config['auto_responder'];
+
+        if(empty($auto_responder_config['enabled'])) {
+            return false;
+        }
+
+        /**
+         * Проверка периода активности автоответчика.
+         */
+        if(empty($auto_responder_config['period_begin']) || empty($auto_responder_config['period_end'])) {
+            return false;
+        }
+
+        try {
+            $period_begin = Carbon::createFromFormat('H:i', $auto_responder_config['period_begin']);
+            $period_end = Carbon::createFromFormat('H:i', $auto_responder_config['period_end']);
+        } catch (Throwable $e) {
+            Log::error('[SrcLab\SupportBot] Ошибка парсинга дат.', [$e]);
+            return false;
+        }
+
+        if(!now()->between($period_begin, $period_end)) {
+            return false;
+        }
+
+        /**
+         * Проверка полученных данных, определение возможности сформировать ответ.
+         */
+        if(!$this->checkWebhookData($data) || empty($auto_responder_config['message'])) {
+            return false;
+        }
+
+        /**
+         * Отправка автоответа.
+         */
+        $this->sendMessage($data['client']['clientId'], $auto_responder_config['message'], $data['operator']['login']);
+
+        return true;
     }
 
 }
