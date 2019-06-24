@@ -280,9 +280,10 @@ class SupportBot
      * Проверка полученных данных в вебхуке, определение возможности сформировать ответ.
      *
      * @param array $data
+     * @param bool $check_operator
      * @return bool
      */
-    protected function checkWebhookData(array $data)
+    protected function checkWebhookData(array $data, $check_operator = true)
     {
         /**
          * Проверка секретки.
@@ -303,7 +304,7 @@ class SupportBot
         /**
          * Проверка наличия оператора.
          */
-        if(empty($data['operator']['login'])) {
+        if($check_operator && empty($data['operator']['login'])) {
             Log::error('[SrcLab\SupportBot] Не найден оператор.', $data);
             return false;
         }
@@ -487,14 +488,23 @@ class SupportBot
         /**
          * Проверка полученных данных, определение возможности сформировать ответ.
          */
-        if(!$this->checkWebhookData($data) || empty($auto_responder_config['message'])) {
+        if(!$this->checkWebhookData($data, false) || empty($auto_responder_config['message'])) {
+            return false;
+        }
+
+        /**
+         * Проверка типа полученного сообщения. Для реального сообщения от пользователя тип должен быть = null.
+         */
+        if(!empty($data['message']['messageType'])) {
             return false;
         }
 
         /**
          * Отправка автоответа.
          */
-        $this->sendMessage($data['client']['clientId'], $auto_responder_config['message'], $data['operator']['login']);
+        $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'offline' ? null : $data['operator']['login'];
+
+        $this->sendMessage($data['client']['clientId'], $auto_responder_config['message'], $operator);
 
         return true;
     }
