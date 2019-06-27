@@ -504,6 +504,8 @@ class SupportBot
          */
         $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'offline' ? null : $data['operator']['login'];
 
+        Log::debug('[SupportBot] Отправка автоответа.', ['operator' => $operator, 'config' => $auto_responder_config, 'data' => $data, 'talkme_config' => $this->config['accounts']['talk_me']]);
+
         $this->sendMessage($data['client']['clientId'], $auto_responder_config['message'], $operator);
 
         return true;
