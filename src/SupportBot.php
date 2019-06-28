@@ -500,13 +500,30 @@ class SupportBot
         }
 
         /**
+         * Сегодня уже был отправлен автоответ.
+         * @var \Illuminate\Contracts\Cache\Repository $cache
+         */
+        $cache = app('cache');
+        $cache_key = 'SupportBot:TodayJustSentAutoRespond';
+
+        $just_sent_clients = $cache->get($cache_key, []);
+
+        if(!empty($just_sent_clients[$data['client']['clientId']])) {
+            return true;
+        }
+
+        /**
          * Отправка автоответа.
          */
-        $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'offline' ? null : $data['operator']['login'];
-
-        Log::debug('[SupportBot] Отправка автоответа.', ['operator' => $operator, 'config' => $auto_responder_config, 'data' => $data, 'talkme_config' => $this->config['accounts']['talk_me']]);
+        $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'Offline' ? null : $data['operator']['login'];
 
         $this->sendMessage($data['client']['clientId'], $auto_responder_config['message'], $operator);
+
+        /**
+         * Отметка что сегодня уже был отправлен автоответ.
+         */
+        $just_sent_clients[$data['client']['clientId']] = true;
+        $cache->set($cache_key, $just_sent_clients, $period_end);
 
         return true;
     }
