@@ -26,6 +26,11 @@ class SupportBot
     protected $config;
 
     /**
+     * @var \Illuminate\Contracts\Cache\Repository $cache
+     */
+    protected $cache;
+
+    /**
      * SupportAutoAnswering constructor.
      */
     public function __construct()
@@ -33,6 +38,7 @@ class SupportBot
         $this->config = config('support_bot');
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
+        $this->cache = app('cache');
     }
 
     /**
@@ -74,7 +80,7 @@ class SupportBot
         /**
          * Формирование автоответа.
          */
-        $answer = $this->getAnswer($data);
+        list($answer_index, $answer) = $this->getAnswer($data);
 
         if(empty($answer)) {
             return;
@@ -89,6 +95,11 @@ class SupportBot
          * Увеличение счетчика отправленных сообщений для статистики.
          */
         $this->sentMessagesAnalyse();
+
+        /**
+         * Запись информации о том, что ответ уже отправлялся сегодня.
+         */
+        $this->writeJustSentAnswerToday($answer_index, $data['client']['clientId']);
 
     }
 
@@ -124,15 +135,13 @@ class SupportBot
      */
     public function getSentMessagesStatistic()
     {
-        /** @var \Illuminate\Contracts\Cache\Repository $cache */
-        $cache = app('cache');
         $cache_key = 'SupportBot:SentMessagesByDays';
         $cache_days = $this->config['sent_messages_analyse']['cache_days'];
 
         /**
          * Получение количества отправленных ботом сообщений по дням.
          */
-        $data = $cache->get($cache_key, []);
+        $data = $this->cache->get($cache_key, []);
 
         if(empty($data)) {
             return $data;
@@ -188,7 +197,7 @@ class SupportBot
      * Получение ответа на обращение.
      *
      * @param array $data
-     * @return string
+     * @return array
      * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     protected function getAnswer(array $data)
@@ -199,8 +208,11 @@ class SupportBot
         $answers = $this->config['auto_answers'];
 
         $result_answer = '';
+        $answer_index = -1;
 
         foreach ($answers as $question => $answer) {
+
+            $answer_index++;
 
             if(preg_match('/'.$question.'/iu', $data['message']['text'])) {
                 $result_answer = $answer;
@@ -211,6 +223,13 @@ class SupportBot
 
         if(empty($result_answer)) {
             return $result_answer;
+        }
+
+        /**
+         * Если сегодня уже отправляли такой ответ.
+         */
+        if($this->isJustSentAnswerToday($answer_index, $data['client']['clientId'])) {
+            return [-1, ''];
         }
 
         /**
@@ -229,7 +248,7 @@ class SupportBot
          * Если получена фраза приветствия и уже здоровались, то ничего отвечать не нужно.
          */
         if($already_said_hello && $answer_is_greeting) {
-            return '';
+            return [-1, ''];
         }
 
         /**
@@ -240,7 +259,7 @@ class SupportBot
             $result_answer = $this->config['greeting_phrase'] . "\n\n" . $result_answer;
         }
 
-        return $result_answer;
+        return [$answer_index, $result_answer];
     }
 
     /**
@@ -333,14 +352,12 @@ class SupportBot
      */
     public function alreadySaidHello(array $data)
     {
-        /** @var \Illuminate\Contracts\Cache\Repository $cache */
-        $cache = app('cache');
         $cache_key = 'SupportBot:AlreadySaidHello:'.$data['client']['searchId'];
 
         /**
          * В кеше есть запись о том, что сегодня уже здоровались.
          */
-        if($cache->has($cache_key)) {
+        if($this->cache->has($cache_key)) {
             return true;
         }
 
@@ -357,7 +374,7 @@ class SupportBot
         $today_messages = $this->online_consultant->getMessages($filter);
 
         if(empty($today_messages)) {
-            $cache->set($cache_key, 1, now()->endOfDay());
+            $this->cache->set($cache_key, 1, now()->endOfDay());
             return false;
         }
 
@@ -372,7 +389,7 @@ class SupportBot
         /**
          * Запись в кеш факта приветствия.
          */
-        $cache->set($cache_key, 1, now()->endOfDay());
+        $this->cache->set($cache_key, 1, now()->endOfDay());
 
         return false;
     }
@@ -393,13 +410,11 @@ class SupportBot
 
             /**
              * Получение данных из кеша.
-             * @var \Illuminate\Contracts\Cache\Repository $cache
              */
-            $cache = app('cache');
             $cache_key = 'SupportBot:SentMessagesByDays';
             $cache_days = $this->config['sent_messages_analyse']['cache_days'];
 
-            $data = $cache->get($cache_key, []);
+            $data = $this->cache->get($cache_key, []);
 
             /**
              * Проход по дням, удаление старой информации.
@@ -426,7 +441,7 @@ class SupportBot
             /**
              * Сохранение данных.
              */
-            $cache->set($cache_key, $data, now()->addDays($cache_days));
+            $this->cache->set($cache_key, $data, now()->addDays($cache_days));
 
         } catch (Throwable $e) {
             Log::error('[SrcLab\SupportBot] Ошибка анализатора отправленных сообщений');
@@ -501,12 +516,10 @@ class SupportBot
 
         /**
          * Сегодня уже был отправлен автоответ.
-         * @var \Illuminate\Contracts\Cache\Repository $cache
          */
-        $cache = app('cache');
         $cache_key = 'SupportBot:TodayJustSentAutoRespond';
 
-        $just_sent_clients = $cache->get($cache_key, []);
+        $just_sent_clients = $this->cache->get($cache_key, []);
 
         if(!empty($just_sent_clients[$data['client']['clientId']])) {
             return true;
@@ -523,9 +536,43 @@ class SupportBot
          * Отметка что сегодня уже был отправлен автоответ.
          */
         $just_sent_clients[$data['client']['clientId']] = true;
-        $cache->set($cache_key, $just_sent_clients, $period_end);
+        $this->cache->set($cache_key, $just_sent_clients, $period_end);
 
         return true;
+    }
+
+    /**
+     * Проверка на то, отправлялся ли уже ответ сегодня.
+     *
+     * @param int $answer_key
+     * @param string $client_id
+     * @return bool
+     */
+    protected function isJustSentAnswerToday($answer_key, $client_id)
+    {
+        $sent_today = $this->cache->get('SupportBot:JustSentAnswersToday', []);
+
+        if(!empty($sent_today[$client_id]) && in_array($answer_key, $sent_today[$client_id])) {
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Запись информации в кеш о том, что ответ уже отправлялся сегодня.
+     *
+     * @param int $answer_key
+     * @param string $client_id
+     */
+    protected function writeJustSentAnswerToday($answer_key, $client_id)
+    {
+        $cache_key = 'SupportBot:JustSentAnswersToday';
+        $sent_today = $this->cache->get($cache_key, []);
+
+        $sent_today[$client_id][] = $answer_key;
+
+        $this->cache->set($cache_key, $sent_today, now()->endOfDay()->addHours(3));
     }
 
 }
