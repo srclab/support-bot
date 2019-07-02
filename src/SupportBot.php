@@ -222,7 +222,7 @@ class SupportBot
         }
 
         if(empty($result_answer)) {
-            return $result_answer;
+            return [-1, ''];
         }
 
         /**
