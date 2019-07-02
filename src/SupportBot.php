@@ -207,14 +207,16 @@ class SupportBot
          */
         $answers = $this->config['auto_answers'];
 
+        $message = $data['message']['text'];
         $result_answer = '';
         $answer_index = -1;
+        $default_result = [-1, ''];
 
         foreach ($answers as $question => $answer) {
 
             $answer_index++;
 
-            if(preg_match('/'.$question.'/iu', $data['message']['text'])) {
+            if(preg_match('/'.$question.'/iu', $message)) {
                 $result_answer = $answer;
                 break;
             }
@@ -222,14 +224,21 @@ class SupportBot
         }
 
         if(empty($result_answer)) {
-            return [-1, ''];
+            return $default_result;
         }
 
         /**
          * Если сегодня уже отправляли такой ответ.
          */
         if($this->isJustSentAnswerToday($answer_index, $data['client']['clientId'])) {
-            return [-1, ''];
+            return $default_result;
+        }
+
+        /**
+         * Проверка ответа фильтрами.
+         */
+        if(!app(Filters::class)->checkFilters($message, $answer_index)) {
+            return $default_result;
         }
 
         /**
@@ -248,7 +257,7 @@ class SupportBot
          * Если получена фраза приветствия и уже здоровались, то ничего отвечать не нужно.
          */
         if($already_said_hello && $answer_is_greeting) {
-            return [-1, ''];
+            return $default_result;
         }
 
         /**
