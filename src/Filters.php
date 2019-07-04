@@ -16,7 +16,7 @@ class Filters
         /**
          * Получение массива включенных фильтров.
          */
-        $filters = config('support_bot.answer_filters', []);
+        $filters = app_config('support_bot.answer_filters', []);
 
         if(empty($filters)) {
             return true;

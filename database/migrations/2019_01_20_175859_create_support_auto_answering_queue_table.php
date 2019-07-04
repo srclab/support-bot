@@ -13,7 +13,7 @@ class CreateSupportAutoAnsweringQueueTable extends Migration
      */
     public function up()
     {
-        Schema::create(config('support_bot.table_name'), function (Blueprint $table) {
+        Schema::create(app_config('support_bot.table_name'), function (Blueprint $table) {
             $table->increments('id');
             $table->string('client_id', 32);
             $table->string('operator', 32)->nullable();
@@ -29,7 +29,7 @@ class CreateSupportAutoAnsweringQueueTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists(config('support_bot.table_name'));
+        Schema::dropIfExists(app_config('support_bot.table_name'));
     }
 
 }

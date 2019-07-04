@@ -35,7 +35,7 @@ class SupportBot
      */
     public function __construct()
     {
-        $this->config = config('support_bot');
+        $this->config = array_merge(config('support_bot'), app_config('support_bot'));
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
         $this->cache = app('cache');
@@ -340,7 +340,7 @@ class SupportBot
         /**
          * Проверка фильтра пользователей по id на сайте.
          */
-        $only_user_ids = config('support_bot.enabled_for_user_ids');
+        $only_user_ids = $this->config['enabled_for_user_ids'] ?? [];
 
         if(!empty($only_user_ids)
             && (empty($data['client']['customData']['user_id'])

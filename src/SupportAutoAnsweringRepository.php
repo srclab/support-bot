@@ -42,7 +42,7 @@ class SupportAutoAnsweringRepository
     public function getNextSendingPart()
     {
         return $this->query()
-            ->where('created_at', '<', Carbon::now()->subSecond(config('support_bot.answering_delay')))
+            ->where('created_at', '<', Carbon::now()->subSecond(app_config('support_bot.answering_delay')))
             ->limit(50)
             ->get();
     }

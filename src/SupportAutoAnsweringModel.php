@@ -22,7 +22,7 @@ class SupportAutoAnsweringModel extends Model
         /**
          * Определение названия таблицы.
          */
-        $this->table = config('support_bot.table_name');
+        $this->table = app_config('support_bot.table_name');
 
     }
 
