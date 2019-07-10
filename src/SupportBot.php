@@ -290,18 +290,7 @@ class SupportBot
             return true;
         }
 
-        /**
-         * Парсинг времени.
-         */
-        try {
-            $day_beginning = Carbon::createFromFormat('H:i', $period['day_beginning']);
-            $day_end = Carbon::createFromFormat('H:i', $period['day_end']);
-        } catch (Throwable $e) {
-            Log::error('[SrcLab\SupportBot] Ошибка парсинга дат.', [$e]);
-            return true;
-        }
-
-        return Carbon::now()->between($day_beginning, $day_end);
+        return $this->checkCurrentTime($period['day_beginning'], $period['day_end']);
     }
 
     /**
@@ -497,15 +486,7 @@ class SupportBot
             return false;
         }
 
-        try {
-            $period_begin = Carbon::createFromFormat('H:i', $auto_responder_config['period_begin']);
-            $period_end = Carbon::createFromFormat('H:i', $auto_responder_config['period_end']);
-        } catch (Throwable $e) {
-            Log::error('[SrcLab\SupportBot] Ошибка парсинга дат.', [$e]);
-            return false;
-        }
-
-        if(!now()->between($period_begin, $period_end)) {
+        if(!$this->checkCurrentTime($auto_responder_config['period_begin'], $auto_responder_config['period_end'])) {
             return false;
         }
 
@@ -545,7 +526,7 @@ class SupportBot
          * Отметка что сегодня уже был отправлен автоответ.
          */
         $just_sent_clients[$data['client']['clientId']] = true;
-        $this->cache->set($cache_key, $just_sent_clients, $period_end);
+        $this->cache->set($cache_key, $just_sent_clients, Carbon::createFromFormat('H:i', $auto_responder_config['period_end'])->addDays(now()->hour > 12 ? 1 : 0));
 
         return true;
     }
@@ -561,11 +542,7 @@ class SupportBot
     {
         $sent_today = $this->cache->get('SupportBot:JustSentAnswersToday', []);
 
-        if(!empty($sent_today[$client_id]) && in_array($answer_key, $sent_today[$client_id])) {
-            return true;
-        }
-
-        return false;
+        return !empty($sent_today[$client_id]) && in_array($answer_key, $sent_today[$client_id]);
     }
 
     /**
@@ -582,6 +559,24 @@ class SupportBot
         $sent_today[$client_id][] = $answer_key;
 
         $this->cache->set($cache_key, $sent_today, now()->endOfDay()->addHours(3));
+    }
+
+    /**
+     * Проверка, что текущее время содержится в указанном интервале.
+     *
+     * @param string $time_begin
+     * @param string $time_end
+     * @return bool
+     */
+    protected function checkCurrentTime($time_begin, $time_end)
+    {
+        $now_time = now()->format('H:i');
+
+        if($time_begin > $time_end) {
+            return !($now_time < $time_begin && $now_time > $time_end);
+        }
+
+        return $now_time >= $time_begin && $now_time <= $time_end;
     }
 
 }
