@@ -505,6 +505,13 @@ class SupportBot
         }
 
         /**
+         * В инстаграм не отвечать.
+         */
+        if(!empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
+            return true;
+        }
+
+        /**
          * Сегодня уже был отправлен автоответ.
          */
         $cache_key = 'SupportBot:TodayJustSentAutoRespond';
