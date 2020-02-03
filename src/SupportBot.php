@@ -78,6 +78,11 @@ class SupportBot
         }
 
         /**
+         * Удаление отложенных сообщений, если пользователь написал что-либо после приветствия.
+         */
+        $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
+
+        /**
          * Формирование автоответа.
          */
         list($answer_index, $answer) = $this->getAnswer($data);
@@ -90,6 +95,13 @@ class SupportBot
          * Отправка сообщения.
          */
         $this->sendMessage($data['client']['clientId'], $answer, $data['operator']['login']);
+
+        /**
+         * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
+         */
+        if($answer == 'Здравствуйте! ') {
+            $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2)->toDateTime());
+        }
 
         /**
          * Увеличение счетчика отправленных сообщений для статистики.
@@ -105,13 +117,19 @@ class SupportBot
 
     /**
      * Отложенная отправка автоответов.
+     *
+     * @param bool $deferred
      */
-    public function sendAnswers()
+    public function sendAnswers($deferred = false)
     {
         /**
          * Получение пачки сообщений для отправки.
          */
-        $messages = $this->messages_repository->getNextSendingPart();
+        if($deferred) {
+            $messages = $this->messages_repository->getNextDeferredPart();
+        } else {
+            $messages = $this->messages_repository->getNextSendingPart();
+        }
 
         if($messages->isEmpty()) return;
 

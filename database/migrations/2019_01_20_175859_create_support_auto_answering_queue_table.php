@@ -18,6 +18,7 @@ class CreateSupportAutoAnsweringQueueTable extends Migration
             $table->string('client_id', 32);
             $table->string('operator', 32)->nullable();
             $table->text('message');
+            $table->dateTime('send_at')->nullable();;
             $table->dateTime('created_at');
         });
     }

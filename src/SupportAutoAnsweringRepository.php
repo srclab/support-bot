@@ -42,7 +42,22 @@ class SupportAutoAnsweringRepository
     public function getNextSendingPart()
     {
         return $this->query()
-            ->where('created_at', '<', Carbon::now()->subSecond(app_config('support_bot.answering_delay')))
+            ->where('created_at', '<', Carbon::now()->subSeconds(app_config('support_bot.answering_delay')))
+            ->whereNull('send_at')
+            ->limit(50)
+            ->get();
+    }
+
+    /**
+     * Получение очередной пачки отложенных оповещений на отправку.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getNextDeferredPart()
+    {
+        return $this->query()
+            ->whereNotNull('send_at')
+            ->where('send_at', '<=', Carbon::now())
             ->limit(50)
             ->get();
     }
@@ -57,13 +72,14 @@ class SupportAutoAnsweringRepository
      * @param string $client_id
      * @param string $operator
      * @param string $message
+     * @param string $send_at
      */
-    public function addRecord($client_id, $operator, $message)
+    public function addRecord($client_id, $operator, $message, $send_at = null)
     {
         $created_at = Carbon::now();
 
         $this->query()
-            ->insert(compact('client_id', 'operator', 'message', 'created_at'));
+            ->insert(compact('client_id', 'operator', 'message', 'created_at', 'send_at'));
     }
 
     /**
@@ -76,6 +92,19 @@ class SupportAutoAnsweringRepository
     {
         $this->query()
             ->whereIn($column, $values)
+            ->delete();
+    }
+
+    /**
+     * Удаление отложенных сообщений клиенту.
+     *
+     * @param string $client_id
+     */
+    public function deleteDeferredMessagesByClient($client_id)
+    {
+        $this->query()
+            ->where('client_id', $client_id)
+            ->whereNotNull('send_at')
             ->delete();
     }
 
