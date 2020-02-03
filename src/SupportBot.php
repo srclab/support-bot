@@ -80,7 +80,9 @@ class SupportBot
         /**
          * Удаление отложенных сообщений, если пользователь написал что-либо после приветствия.
          */
-        $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
+        if($this->config['deferred_answer_after_welcome'] ?? false) {
+            $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
+        }
 
         /**
          * Формирование автоответа.
@@ -99,7 +101,7 @@ class SupportBot
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
          */
-        if($answer == 'Здравствуйте! 🤗') {
+        if($this->config['deferred_answer_after_welcome'] ?? false && $answer == $this->config['greeting_phrase']) {
             $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
 
