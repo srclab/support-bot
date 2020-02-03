@@ -72,7 +72,7 @@ class SupportAutoAnsweringRepository
      * @param string $client_id
      * @param string $operator
      * @param string $message
-     * @param string $send_at
+     * @param string|Carbon $send_at
      */
     public function addRecord($client_id, $operator, $message, $send_at = null)
     {

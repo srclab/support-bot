@@ -99,8 +99,8 @@ class SupportBot
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
          */
-        if($answer == 'Здравствуйте! ') {
-            $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2)->toDateTime());
+        if($answer == 'Здравствуйте! 🤗') {
+            $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
 
         /**
