@@ -101,7 +101,7 @@ class SupportBot
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
          */
-        if($this->config['deferred_answer_after_welcome'] ?? false && $answer == $this->config['greeting_phrase']) {
+        if($this->config['deferred_answer_after_welcome'] ?? false && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message']['text'])) {
             $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
 
