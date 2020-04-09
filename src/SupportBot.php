@@ -5,13 +5,14 @@ namespace SrcLab\SupportBot;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
 use Throwable;
 
 class SupportBot
 
 {
     /**
-     * @var \SrcLab\SupportBot\SupportAutoAnsweringRepository
+     * @var \SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository
      */
     protected $messages_repository;
 
@@ -31,6 +32,11 @@ class SupportBot
     protected $cache;
 
     /**
+     * @var \SrcLab\SupportBot\Repositories\SupportScriptRepository
+     */
+    protected $scripts_repository;
+
+    /**
      * SupportAutoAnswering constructor.
      */
     public function __construct()
@@ -38,6 +44,7 @@ class SupportBot
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
+        $this->scripts_repository = app(SupportScriptRepository::class);
         $this->cache = app('cache');
     }
 
@@ -101,9 +108,15 @@ class SupportBot
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
          */
-        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message']['text'])) {
+        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message'][
+            ])) {
             $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
+
+        /**
+         * Планирование отложенного сценария для удержания пользователя.
+         */
+        $this->planningPendingScripts($data['client']['clientId']);
 
         /**
          * Увеличение счетчика отправленных сообщений для статистики.
@@ -115,6 +128,46 @@ class SupportBot
          */
         $this->writeJustSentAnswerToday($answer_index, $data['client']['clientId']);
 
+    }
+
+    /**
+     * Отработка сценария.
+     */
+    public function sendScript()
+    {
+        $script = $this->scripts_repository->getNextSendingScriptUser();
+
+        if(!is_null($script)) return;
+
+        /**
+         * Получение сообщений за сегодняшний день и поиск приветствия с нашей стороны.
+         */
+        $filter = [
+            'period' => [Carbon::now()->subDays(1), Carbon::now()->endOfDay()],
+            'client' => [
+                'searchId' => $script->client_id,
+            ]
+        ];
+
+        $messages = $this->online_consultant->getMessages($filter);
+
+        foreach($messages as $message) {
+            if($message['whoSend'] == 'operator') {
+                if (preg_match('/' . $this->config['scripts']['clarfication_select_message'] . '/iu', $message['text'])) {
+                    $result_clarification = $this->config['scripts']['clarfication_message'];
+                    break;
+                }
+            }
+        }
+
+        /**
+         * Удаление сценария.
+         */
+        $script->delete();
+
+        if(!empty($result_clarification)) {
+            $this->online_consultant->sendMessage($script->client_id, $result_clarification, $this->config['accounts']['default_operator']);
+        }
     }
 
     /**
@@ -604,6 +657,16 @@ class SupportBot
         }
 
         return $now_time >= $time_begin && $now_time <= $time_end;
+    }
+
+    /**
+     * Планирование отложенных сценариев.
+     *
+     * @param int $clientId
+     */
+    private function planningPendingScripts($clientId)
+    {
+        $this->scripts_repository->addRecord($clientId, now()->addDay(1));
     }
 
 }

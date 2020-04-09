@@ -1,17 +1,12 @@
 <?php
 
-namespace SrcLab\SupportBot;
+namespace SrcLab\SupportBot\Repositories;
 
-use SrcLab\SupportBot\SupportAutoAnsweringModel as SupportAutoAnsweringModel;
+use SrcLab\SupportBot\Models\SupportAutoAnsweringModel as SupportAutoAnsweringModel;
 use Carbon\Carbon;
 
-class SupportAutoAnsweringRepository
+class SupportAutoAnsweringRepository extends Repository
 {
-    /**
-     * @var \Illuminate\Database\Eloquent\Model
-     */
-    protected $model;
-
     /**
      * SupportAutoAnswering constructor.
      */
@@ -20,22 +15,12 @@ class SupportAutoAnsweringRepository
         $this->model = SupportAutoAnsweringModel::class;
     }
 
-    /**
-     * Получить Builder объект модели.
-     *
-     * @return \Illuminate\Database\Eloquent\Builder
-     */
-    protected function query()
-    {
-        return $this->model::query();
-    }
-
     //****************************************************************
     //************************ Получение *****************************
     //****************************************************************
 
     /**
-     * Получние очередной пачки оповещений на отправку.
+     * Получение очередной пачки оповещений на отправку.
      *
      * @return \Illuminate\Database\Eloquent\Collection
      */
