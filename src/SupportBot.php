@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
+use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use Throwable;
 
 class SupportBot
@@ -37,6 +38,11 @@ class SupportBot
     protected $scripts_repository;
 
     /**
+     * @var \SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository
+     */
+    protected $scripts_exception_repository;
+
+    /**
      * SupportAutoAnswering constructor.
      */
     public function __construct()
@@ -45,6 +51,7 @@ class SupportBot
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
         $this->scripts_repository = app(SupportScriptRepository::class);
+        $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
         $this->cache = app('cache');
     }
 
@@ -150,13 +157,30 @@ class SupportBot
         ];
 
         $messages = $this->online_consultant->getMessages($filter);
+        $exceptions = $this->scripts_exception_repository->getAllException();
+
+        $operator_messages = '';
+        $client_messages = '';
 
         foreach($messages as $message) {
             if($message['whoSend'] == 'operator') {
-                if (preg_match('/' . $this->config['scripts']['clarfication_select_message'] . '/iu', $message['text'])) {
-                    $result_clarification = $this->config['scripts']['clarfication_message'];
+                $operator_messages .= $message['text'];
+            } else {
+                $client_messages .= $message['text'];
+            }
+        }
+
+        if (preg_match('/' . $this->config['scripts']['clarfication_select_message'] . '/iu', $operator_messages)) {
+
+            foreach($exceptions as $exception) {
+                if (preg_match('/(?:'.$exception.')/iu', $client_messages)) {
+                    $stop_word = true;
                     break;
                 }
+            }
+
+            if(!empty($stop_word)) {
+                $result_clarification = $this->config['scripts']['clarfication_message'];
             }
         }
 
