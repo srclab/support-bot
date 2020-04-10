@@ -152,7 +152,7 @@ class SupportBot
         $filter = [
             'period' => [Carbon::now()->subDays(1), Carbon::now()->endOfDay()],
             'client' => [
-                'searchId' => $script->client_id,
+                'clientId' => $script->client_id,
             ]
         ];
 
