@@ -6,7 +6,6 @@ use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
-use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use Throwable;
 
 class SupportBot
@@ -33,14 +32,9 @@ class SupportBot
     protected $cache;
 
     /**
-     * @var \SrcLab\SupportBot\Repositories\SupportScriptRepository
+     * @var \SrcLab\SupportBot\SupportBotScript
      */
-    protected $scripts_repository;
-
-    /**
-     * @var \SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository
-     */
-    protected $scripts_exception_repository;
+    protected $support_bot_scripts;
 
     /**
      * SupportAutoAnswering constructor.
@@ -50,8 +44,7 @@ class SupportBot
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
-        $this->scripts_repository = app(SupportScriptRepository::class);
-        $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
+        $this->support_bot_scripts = app(SupportBotScript::class);
         $this->cache = app('cache');
     }
 
@@ -123,7 +116,7 @@ class SupportBot
         /**
          * Планирование отложенного сценария для удержания пользователя.
          */
-        $this->planningPendingScripts($data['client']['clientId']);
+        $this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['clientId']);
 
         /**
          * Увеличение счетчика отправленных сообщений для статистики.
@@ -135,63 +128,6 @@ class SupportBot
          */
         $this->writeJustSentAnswerToday($answer_index, $data['client']['clientId']);
 
-    }
-
-    /**
-     * Отработка сценария.
-     */
-    public function sendScript()
-    {
-        $script = $this->scripts_repository->getNextSendingScriptUser();
-
-        if(!is_null($script)) return;
-
-        /**
-         * Получение сообщений за сегодняшний день и поиск приветствия с нашей стороны.
-         */
-        $filter = [
-            'period' => [Carbon::now()->subDays(1), Carbon::now()->endOfDay()],
-            'client' => [
-                'clientId' => $script->client_id,
-            ]
-        ];
-
-        $messages = $this->online_consultant->getMessages($filter);
-        $exceptions = $this->scripts_exception_repository->getAllException();
-
-        $operator_messages = '';
-        $client_messages = '';
-
-        foreach($messages as $message) {
-            if($message['whoSend'] == 'operator') {
-                $operator_messages .= $message['text'];
-            } else {
-                $client_messages .= $message['text'];
-            }
-        }
-
-        if (preg_match('/' . $this->config['scripts']['clarfication_select_message'] . '/iu', $operator_messages)) {
-
-            foreach($exceptions as $exception) {
-                if (preg_match('/(?:'.$exception.')/iu', $client_messages)) {
-                    $stop_word = true;
-                    break;
-                }
-            }
-
-            if(!empty($stop_word)) {
-                $result_clarification = $this->config['scripts']['clarfication_message'];
-            }
-        }
-
-        /**
-         * Удаление сценария.
-         */
-        $script->delete();
-
-        if(!empty($result_clarification)) {
-            $this->online_consultant->sendMessage($script->client_id, $result_clarification, $this->config['accounts']['default_operator']);
-        }
     }
 
     /**
@@ -681,16 +617,6 @@ class SupportBot
         }
 
         return $now_time >= $time_begin && $now_time <= $time_end;
-    }
-
-    /**
-     * Планирование отложенных сценариев.
-     *
-     * @param int $clientId
-     */
-    private function planningPendingScripts($clientId)
-    {
-        $this->scripts_repository->addRecord($clientId, now()->addDay(1));
     }
 
 }

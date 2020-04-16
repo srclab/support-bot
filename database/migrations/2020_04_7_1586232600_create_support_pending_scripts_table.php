@@ -17,7 +17,7 @@ class CreateSupportPendingScriptsTable extends Migration
             $table->increments('id');
             $table->string('client_id', 32);
             $table->unsignedInteger('step');
-            $table->dateTime('send_first_message_at');
+            $table->dateTime('send_message_at');
         });
     }
 
