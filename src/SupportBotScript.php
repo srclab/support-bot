@@ -160,12 +160,6 @@ class SupportBotScript
 
             $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
 
-        } else {
-
-            /**
-             * Удаление сценария.
-             */
-            $script->delete();
         }
     }
 
@@ -210,7 +204,14 @@ class SupportBotScript
             }
         }
 
-        return !empty($result) ? $result : false;
+        if(empty($result)) {
+
+            $script->delete();
+
+            return false;
+        }
+
+        return $result;
     }
 
     /**
@@ -227,6 +228,23 @@ class SupportBotScript
             return false;
         }
 
+        /**
+         * Проверка на разницу последнего сообщения с текущим временем в 3 часа при отправке уведомления.
+         */
+        $now = Carbon::now();
+        $last_message_datetime = Carbon::parse(end($messages)['dateTime']);
+
+        if($now->diffInHours($last_message_datetime) < 3) {
+
+            $script->send_message_at = $last_message_datetime->addHour(3);
+            $script->save();
+
+            return false;
+        }
+
+        /**
+         * Получение исключений.
+         */
         $exceptions = $this->scripts_exception_repository->getAllException();
 
         $operator_messages = '';
@@ -255,7 +273,14 @@ class SupportBotScript
             }
         }
 
-        return !empty($result) ? $result : false;
+        if(empty($result)) {
+
+            $script->delete();
+
+            return false;
+        }
+
+        return $result;
     }
 
     /**
