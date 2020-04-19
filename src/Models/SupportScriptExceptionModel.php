@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SupportScriptExceptionModel extends Model
 {
+    public $timestamps = false;
+
     /**
      * SupportScriptExceptionModel constructor.
      *

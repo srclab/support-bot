@@ -22,14 +22,13 @@ class SupportScriptRepository extends Repository
     /**
      * Получение очередного отложенного сценария.
      *
-     * @param int $step
      * @return \Illuminate\Database\Eloquent\Collection
      */
-    public function getNextScriptForUser($step = 0)
+    public function getNextScriptForUser()
     {
         return $this->query()
             ->where('send_message_at', '<', Carbon::now())
-            ->where('step', $step)
+            ->whereIn('step', [0, 1])
             ->first();
     }
 

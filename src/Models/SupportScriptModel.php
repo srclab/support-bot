@@ -6,6 +6,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SupportScriptModel extends Model
 {
+    public $timestamps = false;
+
     /**
      * SupportScriptModel constructor.
      *

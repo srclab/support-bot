@@ -4,6 +4,7 @@ namespace SrcLab\SupportBot\Repositories;
 
 use SrcLab\SupportBot\Models\SupportScriptExceptionModel as SupportScriptExceptionModel;
 use Illuminate\Support\Facades\Cache;
+use DB;
 
 class SupportScriptExceptionRepository extends Repository
 {
