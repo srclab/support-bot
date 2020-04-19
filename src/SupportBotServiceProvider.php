@@ -3,6 +3,7 @@
 namespace SrcLab\SupportBot;
 
 use Illuminate\Support\ServiceProvider;
+use SrcLab\SupportBot\Commands\ClearExceptionScriptsCache;
 
 class SupportBotServiceProvider extends ServiceProvider
 {
@@ -29,6 +30,12 @@ class SupportBotServiceProvider extends ServiceProvider
          * Роуты.
          */
         $this->loadRoutesFrom(__DIR__.'/routes.php');
+
+        if ($this->app->runningInConsole()) {
+            $this->commands([
+                ClearExceptionScriptsCache::class
+            ]);
+        }
 
     }
 

@@ -6,7 +6,7 @@ namespace SrcLab\SupportBot\Commands;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 
-class ClearExceptionScriptsCache
+class ClearExceptionScriptsCache extends Command
 {
     /**
      * The name and signature of the console command.
