@@ -41,7 +41,7 @@ class SupportBotScript
     }
 
     /**
-     * Планировка или обработка скрипта для пользователя.
+     * Планировка или обработка сценария для пользователя.
      *
      * @param $clientId
      */
@@ -61,105 +61,43 @@ class SupportBotScript
     }
 
     /**
-     * Обработка скрипта для пользователя.
+     * Обработка сценария для пользователя.
      *
-     * @param $script
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
      */
     public function processScript($script)
     {
         if($script->send_message_at > now()) return;
 
-        $steps = $this->config['scripts']['clarfication']['steps'];
+        if(empty($this->config['scripts']['clarfication']['steps'][$script->step])) return;
 
-        if(empty($steps[$script->step])) return;
+        $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(1), Carbon::now()->endOfDay(), $dialog);
 
-        /**
-         * Получение сообщений.
-         */
-        $filter = [
-            'period' => [Carbon::now()->subDay(1), Carbon::now()->endOfDay()],
-            'client' => [
-                'clientId' => $script->client_id,
-            ],
-        ];
-
-        $messages = $this->online_consultant->getMessages($filter);
-
-        $messages = array_shift($messages);
-
-        $messages = $messages['messages'];
+        if(!$messages) {
+            return false;
+        }
 
         if($script->step == $this->config['scripts']['clarfication']['final_step']) {
 
-            $result = $steps[$this->config['scripts']['clarfication']['final_step']]['message'];
-
-            /**
-             * todo раскоментировать
-             */
-            $script->delete();
+            $result = $this->getFinalMessageAndDeleteScript($script);
 
         } else {
 
-            if ($script->step == 2) {
+            $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
 
-                $select_message = '(?:' . preg_replace('/[\x00-\x1F\x7F\s]/', '', $this->config['scripts']['clarfication']['select_message']) . ')';
+            if (strlen($client_messages) > 0) {
 
-            } else {
+                if (!empty($this->config['scripts']['clarfication']['steps'][$script->step]['is_final'])) {
 
-                $select_message = '(?:';
+                    $result = $this->config['scripts']['clarfication']['steps'][$script->step]['message'];
 
-                foreach ($steps[$script->step-1]['variants'] as $key => $variant) {
-
-                    $select_message .= preg_replace('/[\x00-\x1F\x7F\s]/', '', quotemeta($variant['message']));
-
-                    if ($key != array_key_last($steps[$script->step-1]['variants'])) {
-                        $select_message .= '|';
-                    }
-                }
-
-                $select_message .= ')';
-            }
-
-            foreach ($messages as $key => $message) {
-                if ($message['whoSend'] == 'operator') {
-
-                    if (preg_match('/' . $select_message . '/iu', preg_replace('/[\x00-\x1F\x7F\s]/', '', $message['text']))) {
-                        $script_message_id = $key;
-                        /**
-                         * todo раскоментировать
-                         */
-                        //break;
-                    }
-                }
-            }
-
-            $client_messages = '';
-
-            if (!empty($script_message_id)) {
-                for ($i = ($script_message_id + 1); $i < (array_key_last($messages) + 1); $i++) {
-
-                    if ($messages[$i]['whoSend'] == 'client') {
-
-                        $client_messages .= $messages[$i]['text'];
-                    }
-
-                }
-            }
-
-            if (!empty($client_messages)) {
-
-                if (!empty($steps[$script->step]['is_final'])) {
-
-                    $result = $steps[$script->step]['message'];
-
-                    /**
-                     * todo раскоментировать
-                     */
                     $script->delete();
 
                 } else {
-                    foreach ($steps[$script->step]['variants'] as $variant) {
+
+                    foreach ($this->config['scripts']['clarfication']['steps'][$script->step]['variants'] as $variant) {
                         if (preg_match('/' . $variant['select_message'] . '/iu', $client_messages)) {
+
                             $result = $variant['message'];
 
                             if (empty($variant['next_step'])) {
@@ -171,17 +109,14 @@ class SupportBotScript
                             $script->save();
 
                             break;
+
                         }
                     }
 
                     if (empty($result)) {
-                        $result = $steps[$this->config['scripts']['clarfication']['final_step']]['message'];
-
-                        /**
-                         * todo раскоментировать
-                         */
-                        $script->delete();
+                        $result = $this->getFinalMessageAndDeleteScript($script);
                     }
+
                 }
 
             }
@@ -189,7 +124,7 @@ class SupportBotScript
 
         if(!empty($result)) {
 
-            $this->online_consultant->sendMessage($script->client_id, preg_replace("/\s\s+/", "\n", $result));
+            $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
 
         }
     }
@@ -205,101 +140,62 @@ class SupportBotScript
 
         if($script->step == 0) {
 
-            /**
-             * Получение сообщений.
-             */
-            $filter = [
-                'period' => [Carbon::now()->subDay(1), Carbon::now()->endOfDay()],
-                'client' => [
-                    'clientId' => $script->client_id,
-                ]
-            ];
-
-            $messages = $this->online_consultant->getMessages($filter);
-
-            if(!count($messages)) {
-                $script->delete();
-                return;
-            }
-
-            $messages = array_shift($messages);
-
-            $messages = $messages['messages'];
-
-            $exceptions = $this->scripts_exception_repository->getAllException();
-
-            $operator_messages = '';
-            $client_messages = '';
-
-            foreach ($messages as $message) {
-                if ($message['whoSend'] == 'operator') {
-                    $operator_messages .= $message['text'];
-                } else {
-                    $client_messages .= $message['text'];
-                }
-            }
-
-            if (preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
-
-                foreach ($exceptions as $exception) {
-
-                    if (preg_match('/(?:' . $exception->exception . ')/iu', $client_messages)) {
-                        $stop_word = true;
-                        break;
-                    }
-                }
-
-                if (empty($stop_word)) {
-                    $result = $this->config['scripts']['notification']['message'];
-                }
-            }
+            $result = $this->getResultForNotificationScript($script);
 
             if(!empty($result)) {
-
-                $script->step = 1;
-                /**
-                 * todo раскоментировать
-                 */
-                //$script->send_message_at = now()->addDay(14);
-
-                $script->save();
-
+                $script->send_message_at = now()->addDay(14);
             }
 
         } else {
 
+            $result = $this->getResultForClarificationScript($script);
+
+        }
+
+        if(!empty($result)) {
+
+            $script->step++;
+
+            $script->save();
+
+            $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+
+        } else {
+
             /**
-             * Получение сообщений.
+             * Удаление сценария.
              */
-            $filter = [
-                'period' => [Carbon::now()->subDay(14), Carbon::now()->endOfDay()],
-                'client' => [
-                    'clientId' => $script->client_id,
-                ],
-            ];
+            $script->delete();
+        }
+    }
 
-            $messages = $this->online_consultant->getMessages($filter);
+    /**
+     * Получение сообщения для сценария уточнения.
+     *
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @return false|string
+     */
+    private function getResultForClarificationScript($script)
+    {
+        $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(14), Carbon::now()->endOfDay(), $dialog);
 
-            $messages = array_shift($messages);
+        $client_name = $dialog['name'];
 
-            $client_name = $messages['name'];
+        if(empty($messages)) {
+            $result = $this->insertClientNameInString($this->config['scripts']['clarfication']['message'], $client_name);
+        } else {
 
-            $messages = $messages['messages'];
-
-            foreach($messages as $key=>$message) {
+            foreach ($messages as $key => $message) {
                 if ($message['whoSend'] == 'operator') {
 
-                    if (preg_replace('/[\x00-\x1F\x7F\s]/', '', $message['text']) == preg_replace('/[\x00-\x1F\x7F\s]/', '', $this->config['scripts']['notification']['message'])) {
+                    if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($this->config['scripts']['notification']['message'])) {
                         $script_message_id = $key;
-                        /**
-                         * todo раскоментировать
-                         */
-                        //break;
+                        break;
                     }
                 }
             }
 
-            if(!empty($script_message_id)) {
+            if (!empty($script_message_id)) {
                 for ($i = ($script_message_id + 1); $i < (array_key_last($messages) + 1); $i++) {
 
                     if ($messages[$i]['whoSend'] == 'client') {
@@ -309,31 +205,160 @@ class SupportBotScript
                 }
             }
 
-            if(empty($is_client_sent_message)) {
+            if (empty($is_client_sent_message)) {
                 $result = $this->insertClientNameInString($this->config['scripts']['clarfication']['message'], $client_name);
             }
-
-            if(!empty($result)) {
-
-                $script->step = 2;
-
-                $script->save();
-
-            }
-
         }
 
-        if(!empty($result)) {
+        return !empty($result) ? $result : false;
+    }
 
-            $this->online_consultant->sendMessage($script->client_id, preg_replace("/\s\s+/", "\n", $result));
+    /**
+     * Получение сообщения для сценария уведомления.
+     *
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @return false|string
+     */
+    private function getResultForNotificationScript($script)
+    {
+        $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(1), Carbon::now()->endOfDay(), $dialog);
+
+        if(!$messages) {
+            return false;
+        }
+
+        $exceptions = $this->scripts_exception_repository->getAllException();
+
+        $operator_messages = '';
+        $client_messages = '';
+
+        foreach ($messages as $message) {
+            if ($message['whoSend'] == 'operator') {
+                $operator_messages .= $message['text'];
+            } else {
+                $client_messages .= $message['text'];
+            }
+        }
+
+        if (preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
+
+            foreach ($exceptions as $exception) {
+
+                if (preg_match('/(?:' . $exception->exception . ')/iu', $client_messages)) {
+                    $stop_word = true;
+                    break;
+                }
+            }
+
+            if (empty($stop_word)) {
+                $result = $this->config['scripts']['notification']['message'];
+            }
+        }
+
+        return !empty($result) ? $result : false;
+    }
+
+    /**
+     * Получение диалога с клиентом.
+     *
+     * @param string $clientId
+     * @param \Carbon\Carbon $start_date
+     * @param \Carbon\Carbon $end_date
+     * @param array $data
+     * @return false|array
+     */
+    private function getClientDialog($clientId, $start_date, $end_date, &$data)
+    {
+        /**
+         * Получение сообщений.
+         */
+        $filter = [
+            'period' => [$start_date, $end_date],
+            'client' => [
+                'clientId' => $clientId,
+            ],
+        ];
+
+        $data = $this->online_consultant->getMessages($filter);
+
+        if(!count($data)) {
+            return false;
+        }
+
+        $data = array_shift($data);
+
+        return $data['messages'];
+    }
+
+    /**
+     * Получить сообщения клиента после последнего отправленного сообщения сценария.
+     *
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @param array $messages
+     * @return string
+     */
+    private function getClientMessageAfterLastScriptMessage($script, $messages)
+    {
+        if ($script->step == 2) {
+
+            $select_message = '(?:' . $this->deleteControlCharactersAndSpaces($this->config['scripts']['clarfication']['select_message']) . ')';
 
         } else {
 
-            /**
-             * Удаление сценария.
-             */
-            $script->delete();
+            $prev_step = $script->step-1;
+
+            $select_message = '(?:';
+
+            foreach ($this->config['scripts']['clarfication']['steps'][$prev_step]['variants'] as $key => $variant) {
+
+                $select_message .= $this->deleteControlCharactersAndSpaces(quotemeta($variant['message']));
+
+                if ($key != array_key_last($this->config['scripts']['clarfication']['steps'][$prev_step]['variants'])) {
+                    $select_message .= '|';
+                }
+            }
+
+            $select_message .= ')';
         }
+
+        foreach ($messages as $key => $message) {
+            if ($message['whoSend'] == 'operator') {
+
+                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
+                    $script_message_id = $key;
+                    break;
+                }
+            }
+        }
+
+        $client_messages = '';
+
+        if (!empty($script_message_id)) {
+            for ($i = ($script_message_id + 1); $i < (array_key_last($messages) + 1); $i++) {
+
+                if ($messages[$i]['whoSend'] == 'client') {
+
+                    $client_messages .= $messages[$i]['text'];
+                }
+
+            }
+        }
+
+        return $client_messages;
+    }
+
+
+    /**
+     * Получение финального сообщения для сценария и удаление сценария.
+     *
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @return string
+     */
+    private function getFinalMessageAndDeleteScript($script)
+    {
+        $script->delete();
+
+        return $this->config['scripts']['clarfication']['steps'][$this->config['scripts']['clarfication']['final_step']]['message'];
     }
 
     /**
@@ -349,12 +374,34 @@ class SupportBotScript
     }
 
     /**
+     * Замена множественных пробелов на перенос строки.
+     *
+     * @param string $string
+     * @return string
+     */
+    private function replaceMultipleSpacesWithLineBreaks($string)
+    {
+        return preg_replace("/\s\s+/", "\n", $string);
+    }
+
+    /**
+     * Удаление управляющих символов и пробелов из строки.
+     *
+     * @param string $string
+     * @return string
+     */
+    private function deleteControlCharactersAndSpaces($string)
+    {
+        return preg_replace('/[\x00-\x1F\x7F\s]/', '', $string);
+    }
+
+    /**
      * Планирование отложенных сценариев.
      *
      * @param int $clientId
      */
     private function planningPendingScripts($clientId)
     {
-        $this->scripts_repository->addRecord($clientId, now());
+        $this->scripts_repository->addRecord($clientId, now()->addHour(3));
     }
 }
