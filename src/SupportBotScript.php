@@ -67,9 +67,9 @@ class SupportBotScript
      */
     public function processScript($script)
     {
-        if($script->send_message_at > now()) return;
-
         if(empty($this->config['scripts']['clarfication']['steps'][$script->step])) return;
+
+        if($script->send_message_at > now()) return;
 
         $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(1), Carbon::now()->endOfDay(), $dialog);
 
@@ -91,7 +91,11 @@ class SupportBotScript
 
                     $result = $this->config['scripts']['clarfication']['steps'][$script->step]['message'];
 
-                    $script->delete();
+                    /**
+                     * Установка несуществующего шага для завершения скрипта.
+                     */
+                    $script->step = 10;
+                    $script->save();
 
                 } else {
 
@@ -364,6 +368,13 @@ class SupportBotScript
                 if ($messages[$i]['whoSend'] == 'client') {
 
                     $client_messages .= $messages[$i]['text'];
+                } else {
+
+                    /**
+                     * Удаление скрипта в случае если диалог подхватил реальный оператор.
+                     */
+                    $script->delete();
+
                 }
 
             }
@@ -381,7 +392,12 @@ class SupportBotScript
      */
     private function getFinalMessageAndDeleteScript($script)
     {
-        $script->delete();
+        /**
+         * Установка несуществующего шага для завершения скрипта.
+         */
+        $script->step = 10;
+
+        $script->save();
 
         return $this->config['scripts']['clarfication']['steps'][$this->config['scripts']['clarfication']['final_step']]['message'];
     }
