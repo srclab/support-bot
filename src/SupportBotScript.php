@@ -73,7 +73,7 @@ class SupportBotScript
 
         if($script->send_message_at > now()) return;
 
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay(), $dialog);
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -182,7 +182,7 @@ class SupportBotScript
      */
     private function getResultForClarificationScript($script)
     {
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(14), Carbon::now()->endOfDay(), $dialog);
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(14), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -241,7 +241,7 @@ class SupportBotScript
      */
     private function getResultForNotificationScript($script)
     {
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay(), $dialog);
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -285,7 +285,7 @@ class SupportBotScript
 
             foreach ($exceptions as $exception) {
 
-                if (preg_match('/(?:' . $exception->exception . ')/iu', $client_messages)) {
+                if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
                     $stop_word = true;
                     break;
                 }
