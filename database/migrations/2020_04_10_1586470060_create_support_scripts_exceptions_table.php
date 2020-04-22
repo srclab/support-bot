@@ -13,7 +13,7 @@ class CreateSupportScriptsExceptionsTable extends Migration
      */
     public function up()
     {
-        Schema::create(app_config('support_bot.scripts')['exceptions_table_name'], function (Blueprint $table) {
+        Schema::create(app_config('support_bot.scripts.exceptions_table_name'), function (Blueprint $table) {
             $table->increments('id');
             $table->string('exception');
         });

@@ -36,7 +36,7 @@ class SupportScriptExceptionRepository extends Repository
     public function getAllException()
     {
         return Cache::rememberForever('script_exception', function () {
-            return DB::table($this->config['scripts']['exceptions_table_name'])->get();
+            return $this->getAll();
         });
     }
 }

@@ -108,15 +108,16 @@ class SupportBot
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
          */
-        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message'][
-            ])) {
+        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message']['text'])) {
             $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
 
-        /**
-         * Планирование отложенного сценария для удержания пользователя.
-         */
-        $this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['clientId']);
+        if(!empty($this->config['scripts']['enabled'])) {
+            /**
+             * Планирование отложенного сценария для удержания пользователя.
+             */
+            $this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['clientId']);
+        }
 
         /**
          * Увеличение счетчика отправленных сообщений для статистики.

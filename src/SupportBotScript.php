@@ -43,14 +43,15 @@ class SupportBotScript
     /**
      * Планировка или обработка сценария для пользователя.
      *
-     * @param $clientId
+     * @param $client_id
      */
-    public function planingOrProcessScriptForUser($clientId)
+    public function planingOrProcessScriptForUser($client_id)
     {
-        $script = $this->scripts_repository->findBy(['client_id' => $clientId]);
+        /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
+        $script = $this->scripts_repository->findBy(['client_id' => $client_id]);
 
         if(is_null($script)) {
-            $this->planningPendingScripts($clientId);
+            $this->planningPendingScripts($client_id);
         } else {
             if($script->step == 1) {
                 $script->delete();
@@ -63,21 +64,26 @@ class SupportBotScript
     /**
      * Обработка сценария для пользователя.
      *
-     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @param $script
+     * @return bool|void
      */
     public function processScript($script)
     {
-        if(empty($this->config['scripts']['clarfication']['steps'][$script->step])) return;
+        if(empty($this->config['scripts']['clarification']['steps'][$script->step])) return;
 
         if($script->send_message_at > now()) return;
 
-        $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(1), Carbon::now()->endOfDay(), $dialog);
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay(), $dialog);
 
-        if(!$messages) {
+        if(!$dialog) {
             return false;
         }
 
-        if($script->step == $this->config['scripts']['clarfication']['final_step']) {
+        $dialog = array_shift($dialog);
+
+        $messages = $dialog['messages'];
+
+        if($script->step == $this->config['scripts']['clarification']['final_step']) {
 
             $result = $this->getFinalMessageAndDeleteScript($script);
 
@@ -87,25 +93,25 @@ class SupportBotScript
 
             if (strlen($client_messages) > 0) {
 
-                if (!empty($this->config['scripts']['clarfication']['steps'][$script->step]['is_final'])) {
+                if (!empty($this->config['scripts']['clarification']['steps'][$script->step]['is_final'])) {
 
-                    $result = $this->config['scripts']['clarfication']['steps'][$script->step]['message'];
+                    $result = $this->config['scripts']['clarification']['steps'][$script->step]['message'];
 
                     /**
                      * Установка несуществующего шага для завершения скрипта.
                      */
-                    $script->step = 10;
+                    $script->step = -1;
                     $script->save();
 
                 } else {
 
-                    foreach ($this->config['scripts']['clarfication']['steps'][$script->step]['variants'] as $variant) {
+                    foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
                         if (preg_match('/' . $variant['select_message'] . '/iu', $client_messages)) {
 
                             $result = $variant['message'];
 
                             if (empty($variant['next_step'])) {
-                                $script->step = $this->config['scripts']['clarfication']['final_step'];
+                                $script->step = $this->config['scripts']['clarification']['final_step'];
                             } else {
                                 $script->step++;
                             }
@@ -138,6 +144,7 @@ class SupportBotScript
      */
     public function sendStartMessageForUser()
     {
+        /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
         $script = $this->scripts_repository->getNextScriptForUser();
 
         if(is_null($script)) return;
@@ -147,7 +154,7 @@ class SupportBotScript
             $result = $this->getResultForNotificationScript($script);
 
             if(!empty($result)) {
-                $script->send_message_at = now()->addDay(14);
+                $script->send_message_at = now()->addDays(14);
             }
 
         } else {
@@ -175,12 +182,20 @@ class SupportBotScript
      */
     private function getResultForClarificationScript($script)
     {
-        $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(14), Carbon::now()->endOfDay(), $dialog);
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(14), Carbon::now()->endOfDay(), $dialog);
+
+        if(!$dialog) {
+            return false;
+        }
+
+        $dialog = array_shift($dialog);
 
         $client_name = $dialog['name'];
 
+        $messages = $dialog['messages'];
+
         if(empty($messages)) {
-            $result = $this->insertClientNameInString($this->config['scripts']['clarfication']['message'], $client_name);
+            $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
         } else {
 
             foreach ($messages as $key => $message) {
@@ -204,7 +219,7 @@ class SupportBotScript
             }
 
             if (empty($is_client_sent_message)) {
-                $result = $this->insertClientNameInString($this->config['scripts']['clarfication']['message'], $client_name);
+                $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
             }
         }
 
@@ -226,11 +241,15 @@ class SupportBotScript
      */
     private function getResultForNotificationScript($script)
     {
-        $messages = $this->getClientDialog($script->client_id, Carbon::now()->subDay(1), Carbon::now()->endOfDay(), $dialog);
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay(), $dialog);
 
-        if(!$messages) {
+        if(!$dialog) {
             return false;
         }
+
+        $dialog = array_shift($dialog);
+
+        $messages = $dialog['messages'];
 
         /**
          * Проверка на разницу последнего сообщения с текущим временем в 3 часа при отправке уведомления.
@@ -240,7 +259,7 @@ class SupportBotScript
 
         if($now->diffInHours($last_message_datetime) < 3) {
 
-            $script->send_message_at = $last_message_datetime->addHour(3);
+            $script->send_message_at = $last_message_datetime->addHours(3);
             $script->save();
 
             return false;
@@ -290,13 +309,12 @@ class SupportBotScript
     /**
      * Получение диалога с клиентом.
      *
-     * @param string $clientId
+     * @param string $client_id
      * @param \Carbon\Carbon $start_date
      * @param \Carbon\Carbon $end_date
-     * @param array $data
      * @return false|array
      */
-    private function getClientDialog($clientId, $start_date, $end_date, &$data)
+    private function getClientDialog($client_id, $start_date, $end_date)
     {
         /**
          * Получение сообщений.
@@ -304,19 +322,13 @@ class SupportBotScript
         $filter = [
             'period' => [$start_date, $end_date],
             'client' => [
-                'clientId' => $clientId,
+                'clientId' => $client_id,
             ],
         ];
 
-        $data = $this->online_consultant->getMessages($filter);
+        $dialog =  $this->online_consultant->getMessages($filter);
 
-        if(!count($data)) {
-            return false;
-        }
-
-        $data = array_shift($data);
-
-        return $data['messages'];
+        return empty($dialog) ? false : $dialog;
     }
 
     /**
@@ -330,7 +342,7 @@ class SupportBotScript
     {
         if ($script->step == 2) {
 
-            $select_message = '(?:' . $this->deleteControlCharactersAndSpaces($this->config['scripts']['clarfication']['select_message']) . ')';
+            $select_message = '(?:' . $this->deleteControlCharactersAndSpaces($this->config['scripts']['clarification']['select_message']) . ')';
 
         } else {
 
@@ -338,11 +350,11 @@ class SupportBotScript
 
             $select_message = '(?:';
 
-            foreach ($this->config['scripts']['clarfication']['steps'][$prev_step]['variants'] as $key => $variant) {
+            foreach ($this->config['scripts']['clarification']['steps'][$prev_step]['variants'] as $key => $variant) {
 
                 $select_message .= $this->deleteControlCharactersAndSpaces(quotemeta($variant['message']));
 
-                if ($key != array_key_last($this->config['scripts']['clarfication']['steps'][$prev_step]['variants'])) {
+                if ($key != array_key_last($this->config['scripts']['clarification']['steps'][$prev_step]['variants'])) {
                     $select_message .= '|';
                 }
             }
@@ -375,6 +387,8 @@ class SupportBotScript
                      */
                     $script->delete();
 
+                    break;
+
                 }
 
             }
@@ -395,11 +409,11 @@ class SupportBotScript
         /**
          * Установка несуществующего шага для завершения скрипта.
          */
-        $script->step = 10;
+        $script->step = -1;
 
         $script->save();
 
-        return $this->config['scripts']['clarfication']['steps'][$this->config['scripts']['clarfication']['final_step']]['message'];
+        return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['message'];
     }
 
     /**
@@ -439,10 +453,10 @@ class SupportBotScript
     /**
      * Планирование отложенных сценариев.
      *
-     * @param int $clientId
+     * @param int $client_id
      */
-    private function planningPendingScripts($clientId)
+    private function planningPendingScripts($client_id)
     {
-        $this->scripts_repository->addRecord($clientId, now()->addHour(3));
+        $this->scripts_repository->addRecord($client_id, now()->addHours(3));
     }
 }

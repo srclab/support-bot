@@ -13,7 +13,7 @@ class ClearExceptionScriptsCache extends Command
      *
      * @var string
      */
-    protected $signature = 'bot:clear_exception_cache';
+    protected $signature = 'support_bot:clear_exception_cache';
 
     /**
      * The console command description.

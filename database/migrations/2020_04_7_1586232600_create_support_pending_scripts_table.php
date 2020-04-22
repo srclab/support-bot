@@ -13,10 +13,10 @@ class CreateSupportPendingScriptsTable extends Migration
      */
     public function up()
     {
-        Schema::create(app_config('support_bot.scripts')['table_name'], function (Blueprint $table) {
+        Schema::create(app_config('support_bot.scripts.table_name'), function (Blueprint $table) {
             $table->increments('id');
             $table->string('client_id', 32);
-            $table->unsignedInteger('step');
+            $table->tinyInteger('step')->default(0);
             $table->dateTime('send_message_at');
         });
     }

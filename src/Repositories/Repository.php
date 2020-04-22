@@ -3,7 +3,7 @@
 
 namespace SrcLab\SupportBot\Repositories;
 
-class Repository
+abstract class Repository
 {
     /**
      * @var \Illuminate\Database\Eloquent\Model
@@ -18,6 +18,27 @@ class Repository
     protected function query()
     {
         return $this->model::query();
+    }
+
+    /**
+     * Получить все записи.
+     *
+     * @param  array $columns
+     * @return \Illuminate\Database\Eloquent\Collection|static[]
+     */
+    public function getAll($columns = ['*'])
+    {
+        if (empty($columns)) {
+            $columns = ['*'];
+        }
+
+        $where = $this->getExtendedWhere();
+
+        if (!empty($where)) {
+            return $this->query()->where($where)->get($columns);
+        } else {
+            return $this->query()->get($columns);
+        }
     }
 
     /**
