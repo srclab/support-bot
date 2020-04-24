@@ -60,7 +60,7 @@ return [
      |
      */
     'scripts' => [
-        'enabled' => true,
+        'enabled' => env('SRCLAB_SUPPORT_BOT_SCRIPT_ENABLED', false),
         'table_name' => 'support_bot_pending_sripts',
         'exceptions_table_name' => 'support_bot_pending_exceptions',
         'select_message' => '(?:https:\/\/vse-sdal.com\/promo|https:\/\/vse-sdal.com\/onlajn-pomoshch|http:\/\/taplink.cc\/vsesdal_official)',
@@ -90,7 +90,7 @@ return [
                                          4) заказал в другом месте;
                                          5) другое (поясните ответ).',
                             'select_message' => '(?:НЕТ|НЕ РАЗМЕЩАЛ)',
-                            'next_step' => true,
+                            'next_step' => 3,
                         ]
                     ],
                 ],
@@ -99,7 +99,7 @@ return [
                         [
                             'message' => 'А сколько дней на выполнение вы закладывали?',
                             'select_message' => '(?:дорого)',
-                            'next_step' => true,
+                            'next_step' => 4,
                         ]
                     ],
                 ],

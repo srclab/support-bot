@@ -26,7 +26,7 @@ class CreateSupportScriptsExceptionsTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists(app_config('support_bot.scripts')['exceptions_table_name']);
+        Schema::dropIfExists(app_config('support_bot.scripts.exceptions_table_name'));
     }
 
 }

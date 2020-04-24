@@ -17,6 +17,7 @@ class CreateSupportPendingScriptsTable extends Migration
             $table->increments('id');
             $table->string('client_id', 32);
             $table->tinyInteger('step')->default(0);
+            $table->tinyInteger('prev_step')->nullable();
             $table->dateTime('send_message_at');
         });
     }
@@ -28,7 +29,7 @@ class CreateSupportPendingScriptsTable extends Migration
      */
     public function down()
     {
-        Schema::dropIfExists(app_config('support_bot.scripts')['table_name']);
+        Schema::dropIfExists(app_config('support_bot.scripts.table_name'));
     }
 
 }

@@ -54,7 +54,8 @@ class SupportBotScript
             $this->planningPendingScripts($client_id);
         } else {
             if($script->step == 1) {
-                $script->delete();
+                $script->step = -1;
+                $script->save();
             } else {
                 $this->processScript($script);
             }
@@ -73,6 +74,9 @@ class SupportBotScript
 
         if($script->send_message_at > now()) return;
 
+        /**
+         * Получение сообщений с пользователем.
+         */
         $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
 
         if(!$dialog) {
@@ -85,14 +89,23 @@ class SupportBotScript
 
         if($script->step == $this->config['scripts']['clarification']['final_step']) {
 
+            /**
+             * Отправка пользователю финального сообщения сценария и деактивация сценария для пользователя.
+             */
             $result = $this->getFinalMessageAndDeleteScript($script);
 
         } else {
 
+            /**
+             * Получение последнего сообщения сценария отправленного ботом.
+             */
             $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
 
             if (strlen($client_messages) > 0) {
 
+                /**
+                 * Отправка сообщения и деактивация сценария для пользователя в случае если шаг является финальным.
+                 */
                 if (!empty($this->config['scripts']['clarification']['steps'][$script->step]['is_final'])) {
 
                     $result = $this->config['scripts']['clarification']['steps'][$script->step]['message'];
@@ -105,14 +118,25 @@ class SupportBotScript
 
                 } else {
 
+                    /**
+                     * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
+                     */
                     foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
                         if (preg_match('/' . $variant['select_message'] . '/iu', $client_messages)) {
 
                             $result = $variant['message'];
 
                             if (empty($variant['next_step'])) {
+                                /**
+                                 * Установка следущего шага финальным.
+                                 */
+                                $script->prev_step = $script->step;
                                 $script->step = $this->config['scripts']['clarification']['final_step'];
                             } else {
+                                /**
+                                 * Установка следующего шага и сохранения предидущего.
+                                 */
+                                $script->prev_step = $script->step;
                                 $script->step++;
                             }
 
@@ -123,6 +147,9 @@ class SupportBotScript
                         }
                     }
 
+                    /**
+                     * Отправка финального сообщения в случае если сообщения пользователя не совпало ни с одним из варианта текущего шага.
+                     */
                     if (empty($result)) {
                         $result = $this->getFinalMessageAndDeleteScript($script);
                     }
@@ -134,6 +161,9 @@ class SupportBotScript
 
         if(!empty($result)) {
 
+            /**
+             * Отправка сообщения пользователю.
+             */
             $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
 
         }
@@ -340,21 +370,19 @@ class SupportBotScript
      */
     private function getClientMessageAfterLastScriptMessage($script, $messages)
     {
-        if ($script->step == 2) {
+        if (is_null($script->prev_step)) {
 
             $select_message = '(?:' . $this->deleteControlCharactersAndSpaces($this->config['scripts']['clarification']['select_message']) . ')';
 
         } else {
 
-            $prev_step = $script->step-1;
-
             $select_message = '(?:';
 
-            foreach ($this->config['scripts']['clarification']['steps'][$prev_step]['variants'] as $key => $variant) {
+            foreach ($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants'] as $key => $variant) {
 
                 $select_message .= $this->deleteControlCharactersAndSpaces(quotemeta($variant['message']));
 
-                if ($key != array_key_last($this->config['scripts']['clarification']['steps'][$prev_step]['variants'])) {
+                if ($key != array_key_last($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants'])) {
                     $select_message .= '|';
                 }
             }
