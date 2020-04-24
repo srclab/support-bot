@@ -35,7 +35,7 @@ class SupportScriptExceptionRepository extends Repository
      */
     public function getAllException()
     {
-        return Cache::rembmer('script_exception', 24 * 60 * 60, function () {
+        return Cache::remember('script_exception', 24 * 60 * 60, function () {
             return $this->getAll();
         });
     }
