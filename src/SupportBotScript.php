@@ -367,7 +367,7 @@ class SupportBotScript
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
      * @param array $messages
-     * @return string
+     * @return bool|string
      */
     private function getClientMessageAfterLastScriptMessage($script, $messages)
     {
