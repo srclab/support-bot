@@ -57,16 +57,20 @@ class SupportBotScript
                 $script->step = -1;
                 $script->save();
             } else {
-                $this->processScript($script);
+                if($this->processScript($script)) {
+                    return true;
+                }
             }
         }
+
+        return false;
     }
 
     /**
      * Обработка сценария для пользователя.
      *
      * @param $script
-     * @return bool|void
+     * @return bool
      */
     public function processScript($script)
     {
@@ -166,7 +170,11 @@ class SupportBotScript
              */
             $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
 
+            return true;
+
         }
+
+        return false;
     }
 
     /**
