@@ -101,7 +101,7 @@ class SupportBotScript
              */
             $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
 
-            if (strlen($client_messages) > 0) {
+            if (!empty($client_messages)) {
 
                 /**
                  * Отправка сообщения и деактивация сценария для пользователя в случае если шаг является финальным.
@@ -255,7 +255,8 @@ class SupportBotScript
 
         if(empty($result)) {
 
-            $script->delete();
+            $script->step = -1;
+            $script->save();
 
             return false;
         }
@@ -370,7 +371,7 @@ class SupportBotScript
      */
     private function getClientMessageAfterLastScriptMessage($script, $messages)
     {
-        if (is_null($script->prev_step)) {
+        if ($script->step == 2) {
 
             $select_message = '(?:' . $this->deleteControlCharactersAndSpaces($this->config['scripts']['clarification']['select_message']) . ')';
 
@@ -408,13 +409,15 @@ class SupportBotScript
                 if ($messages[$i]['whoSend'] == 'client') {
 
                     $client_messages .= $messages[$i]['text'];
-                } else {
+                } elseif(empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage')) {
 
                     /**
                      * Удаление скрипта в случае если диалог подхватил реальный оператор.
                      */
-                    $script->delete();
+                    $script->step = -1;
+                    $script->save();
 
+                    return false;
                     break;
 
                 }
