@@ -174,7 +174,7 @@ class SupportBotScript
      */
     public function sendStartMessageForUser()
     {
-        $scripts = $this->scripts_repository->getNextScriptForUser();
+        $scripts = $this->scripts_repository->getNextScripts();
 
         if($scripts->isEmpty()) return;
 

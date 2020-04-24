@@ -24,7 +24,7 @@ class SupportScriptRepository extends Repository
      *
      * @return \Illuminate\Database\Eloquent\Collection
      */
-    public function getNextScriptForUser()
+    public function getNextScripts()
     {
         return $this->query()
             ->where('send_message_at', '<', Carbon::now())
