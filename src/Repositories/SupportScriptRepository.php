@@ -20,7 +20,7 @@ class SupportScriptRepository extends Repository
     //****************************************************************
 
     /**
-     * Получение очередного отложенного сценария.
+     * Получение очередной пачки отложенных сценариев.
      *
      * @return \Illuminate\Database\Eloquent\Collection
      */
@@ -29,7 +29,8 @@ class SupportScriptRepository extends Repository
         return $this->query()
             ->where('send_message_at', '<', Carbon::now())
             ->whereIn('step', [0, 1])
-            ->first();
+            ->limit(20)
+            ->get();
     }
 
 

@@ -77,7 +77,7 @@ class SupportBotScript
         /**
          * Получение сообщений с пользователем.
          */
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
+        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(2), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -174,33 +174,36 @@ class SupportBotScript
      */
     public function sendStartMessageForUser()
     {
+        $scripts = $this->scripts_repository->getNextScriptForUser();
+
+        if($scripts->isEmpty()) return;
+
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
-        $script = $this->scripts_repository->getNextScriptForUser();
+        foreach($scripts as $script) {
 
-        if(is_null($script)) return;
+            if ($script->step == 0) {
 
-        if($script->step == 0) {
+                $result = $this->getResultForNotificationScript($script);
 
-            $result = $this->getResultForNotificationScript($script);
+                if (!empty($result)) {
+                    $script->send_message_at = now()->addDays(14);
+                }
 
-            if(!empty($result)) {
-                $script->send_message_at = now()->addDays(14);
+            } else {
+
+                $result = $this->getResultForClarificationScript($script);
+
             }
 
-        } else {
+            if (!empty($result)) {
 
-            $result = $this->getResultForClarificationScript($script);
+                $script->step++;
 
-        }
+                $script->save();
 
-        if(!empty($result)) {
+                $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
 
-            $script->step++;
-
-            $script->save();
-
-            $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
-
+            }
         }
     }
 
