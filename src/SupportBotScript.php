@@ -180,7 +180,7 @@ class SupportBotScript
     /**
      * Запуск сценария для пользователя.
      */
-    public function sendStartMessageForUser()
+    public function sendStartMessageForUsers()
     {
         $scripts = $this->scripts_repository->getNextScripts();
 

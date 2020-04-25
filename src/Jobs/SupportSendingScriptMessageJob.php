@@ -8,6 +8,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
+use SrcLab\SupportBot\SupportBotScript;
 
 class SupportSendingScriptMessageJob implements ShouldQueue
 {
@@ -21,19 +22,12 @@ class SupportSendingScriptMessageJob implements ShouldQueue
     public $tries = 1;
 
     /**
-     * Таймаут выполнения задачи.
-     *
-     * @var int
-     */
-    public $timeout = 300;
-
-    /**
      * Execute the job.
      *
      * @return void
      */
     public function handle()
     {
-        app(\SrcLab\SupportBot\SupportBotScript::class)->sendStartMessageForUser();
+        app(SupportBotScript::class)->sendStartMessageForUsers();
     }
 }
