@@ -95,7 +95,7 @@ class SupportBot
             /**
              * Планирование отложенного сценария для удержания пользователя.
              */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['clientId'])) return;
+            if($this->support_bot_scripts->planingOrProcessScriptForUser($data)) return;
         }
 
         /**

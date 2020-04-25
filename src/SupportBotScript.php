@@ -43,15 +43,28 @@ class SupportBotScript
     /**
      * Планировка или обработка сценария для пользователя.
      *
-     * @param $client_id
+     * @param array $data
+     * @return bool
      */
-    public function planingOrProcessScriptForUser($client_id)
+    public function planingOrProcessScriptForUser(array $data)
     {
+        /**
+         * Проверка фильтра пользователей по id на сайте.
+         */
+        $only_user_ids = $this->config['scripts']['enabled_for_user_ids'] ?? [];
+
+        if(!empty($only_user_ids)
+            && (empty($data['client']['customData']['user_id'])
+                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
+        ) {
+            return false;
+        }
+
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
-        $script = $this->scripts_repository->findBy(['client_id' => $client_id]);
+        $script = $this->scripts_repository->findBy(['client_id' => $data['client']['clientId']]);
 
         if(is_null($script)) {
-            $this->planningPendingScripts($client_id);
+            $this->planningPendingScripts($data['client']['clientId']);
         } else {
             if($script->step == 1) {
                 $script->step = -1;
