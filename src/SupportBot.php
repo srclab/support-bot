@@ -5,13 +5,14 @@ namespace SrcLab\SupportBot;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
 use Throwable;
 
 class SupportBot
 
 {
     /**
-     * @var \SrcLab\SupportBot\SupportAutoAnsweringRepository
+     * @var \SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository
      */
     protected $messages_repository;
 
@@ -31,6 +32,11 @@ class SupportBot
     protected $cache;
 
     /**
+     * @var \SrcLab\SupportBot\SupportBotScript
+     */
+    protected $support_bot_scripts;
+
+    /**
      * SupportAutoAnswering constructor.
      */
     public function __construct()
@@ -38,6 +44,7 @@ class SupportBot
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
+        $this->support_bot_scripts = app(SupportBotScript::class);
         $this->cache = app('cache');
     }
 
@@ -82,6 +89,13 @@ class SupportBot
          */
         if($this->config['deferred_answer_after_welcome'] ?? false) {
             $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
+        }
+
+        if(!empty($this->config['scripts']['enabled'])) {
+            /**
+             * Планирование отложенного сценария для удержания пользователя.
+             */
+            if($this->support_bot_scripts->planingOrProcessScriptForUser($data)) return;
         }
 
         /**
