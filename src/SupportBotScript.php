@@ -67,8 +67,7 @@ class SupportBotScript
             $this->planningPendingScripts($data['client']['clientId']);
         } else {
             if($script->step == 1) {
-                $script->step = -1;
-                $script->save();
+                $script->delete();
             } else {
                 if($this->processScript($script)) {
                     return true;
@@ -130,8 +129,7 @@ class SupportBotScript
                     /**
                      * Установка несуществующего шага для завершения скрипта.
                      */
-                    $script->step = -1;
-                    $script->save();
+                    $script->delete();
 
                 } else {
 
@@ -207,7 +205,7 @@ class SupportBotScript
                 $result = $this->getResultForNotificationScript($script);
 
                 if (!empty($result)) {
-                    $script->send_message_at = now()->addDays(14);
+                    $script->send_message_at = now()->addMinutes(1);
                 }
 
             } else {
@@ -257,7 +255,7 @@ class SupportBotScript
 
                     if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($this->config['scripts']['notification']['message'])) {
                         $script_message_id = $key;
-                        break;
+                        //break;
                     }
                 }
             }
@@ -279,8 +277,7 @@ class SupportBotScript
 
         if(empty($result)) {
 
-            $script->step = -1;
-            $script->save();
+            $script->delete();
 
             return false;
         }
@@ -312,9 +309,9 @@ class SupportBotScript
         $now = Carbon::now();
         $last_message_datetime = Carbon::parse(end($messages)['dateTime']);
 
-        if($now->diffInHours($last_message_datetime) < 3) {
+        if($now->diffInMinutes($last_message_datetime) < 3) {
 
-            $script->send_message_at = $last_message_datetime->addHours(3);
+            $script->send_message_at = $last_message_datetime->addMinutes(1);
             $script->save();
 
             return false;
@@ -420,7 +417,7 @@ class SupportBotScript
 
                 if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
                     $script_message_id = $key;
-                    break;
+                    //break;
                 }
             }
         }
@@ -438,8 +435,7 @@ class SupportBotScript
                     /**
                      * Удаление скрипта в случае если диалог подхватил реальный оператор.
                      */
-                    $script->step = -1;
-                    $script->save();
+                    $script->delete();
 
                     return false;
                     break;
@@ -464,9 +460,7 @@ class SupportBotScript
         /**
          * Установка несуществующего шага для завершения скрипта.
          */
-        $script->step = -1;
-
-        $script->save();
+        $script->delete();
 
         return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['message'];
     }
@@ -512,6 +506,6 @@ class SupportBotScript
      */
     private function planningPendingScripts($client_id)
     {
-        $this->scripts_repository->addRecord($client_id, now()->addHours(3));
+        $this->scripts_repository->addRecord($client_id, now()->addMinutes(1));
     }
 }
