@@ -43,28 +43,25 @@ class SupportBotScript
     /**
      * Планировка или обработка сценария для пользователя.
      *
-     * @param array $data
+     * @param int $search_id
      * @return bool
      */
-    public function planingOrProcessScriptForUser(array $data)
+    public function planingOrProcessScriptForUser($search_id)
     {
         /**
          * Проверка фильтра пользователей по id на сайте.
          */
         $only_user_ids = $this->config['scripts']['enabled_for_user_ids'] ?? [];
 
-        if(!empty($only_user_ids)
-            && (empty($data['client']['customData']['user_id'])
-                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
-        ) {
+        if(!empty($only_user_ids) && !in_array($search_id, $only_user_ids)) {
             return false;
         }
 
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
-        $script = $this->scripts_repository->findBy(['client_id' => $data['client']['searchId']]);
+        $script = $this->scripts_repository->findBy(['search_id' => $search_id]);
 
         if(is_null($script)) {
-            $this->planningPendingScripts($data['client']['searchId']);
+            $this->planningPendingScripts($search_id);
         } else {
             if($script->step == 1) {
                 $script->delete();
@@ -93,7 +90,7 @@ class SupportBotScript
         /**
          * Получение сообщений с пользователем.
          */
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(2), Carbon::now()->endOfDay());
+        $dialog = $this->getClientDialog($script->search_id, Carbon::now()->subDays(2), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -234,7 +231,7 @@ class SupportBotScript
      */
     private function getResultForClarificationScript($script)
     {
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(14), Carbon::now()->endOfDay());
+        $dialog = $this->getClientDialog($script->search_id, Carbon::now()->subDays(14), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -293,7 +290,7 @@ class SupportBotScript
      */
     private function getResultForNotificationScript($script)
     {
-        $dialog = $this->getClientDialog($script->client_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
+        $dialog = $this->getClientDialog($script->search_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
 
         if(!$dialog) {
             return false;
@@ -361,12 +358,12 @@ class SupportBotScript
     /**
      * Получение диалога с клиентом.
      *
-     * @param string $client_id
+     * @param int $search_id
      * @param \Carbon\Carbon $start_date
      * @param \Carbon\Carbon $end_date
      * @return false|array
      */
-    private function getClientDialog($client_id, $start_date, $end_date)
+    private function getClientDialog($search_id, $start_date, $end_date)
     {
         /**
          * Получение сообщений.
@@ -374,7 +371,7 @@ class SupportBotScript
         $filter = [
             'period' => [$start_date, $end_date],
             'client' => [
-                'searchId' => (int) $client_id,
+                'searchId' => $search_id,
             ],
         ];
 
@@ -502,10 +499,10 @@ class SupportBotScript
     /**
      * Планирование отложенных сценариев.
      *
-     * @param int $client_id
+     * @param int $search_id
      */
-    private function planningPendingScripts($client_id)
+    private function planningPendingScripts($search_id)
     {
-        $this->scripts_repository->addRecord($client_id, now()->addMinutes(1));
+        $this->scripts_repository->addRecord($search_id, now()->addMinutes(1));
     }
 }

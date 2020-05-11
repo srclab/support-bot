@@ -91,11 +91,11 @@ class SupportBot
             $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
         }
 
-        if(!empty($this->config['scripts']['enabled'])) {
+        if(!empty($this->config['scripts']['enabled']) && !empty($data['client']['searchId'])) {
             /**
              * Планирование отложенного сценария для удержания пользователя.
              */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($data)) return;
+            if($this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['searchId'])) return;
         }
 
         /**

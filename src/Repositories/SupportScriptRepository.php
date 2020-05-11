@@ -41,14 +41,14 @@ class SupportScriptRepository extends Repository
     /**
      * Вставка записи.
      *
-     * @param int $client_id
+     * @param int $search_id
      * @param string|Carbon $send_message_at
      * @param int $step
      */
-    public function addRecord($client_id, $send_message_at, $step = 0)
+    public function addRecord($search_id, $send_message_at, $step = 0)
     {
         $this->query()
-            ->insert(compact('client_id', 'step', 'send_message_at'));
+            ->insert(compact('search_id', 'step', 'send_message_at'));
     }
 
 }
