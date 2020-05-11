@@ -193,7 +193,9 @@ class SupportBotScript
         /**
          * Проверка является ли текущее время рабочим временем отправки уведомлений.
          */
-        if(!$this->checkTime(Carbon::now()->format('H:i'), $this->config['scripts']['send_notification_period']['period_begin'], $this->config['scripts']['send_notification_period']['period_begin'])) return;
+        if(!$this->checkTime(Carbon::now()->format('H:i'), $this->config['scripts']['send_notification_period']['period_begin'], $this->config['scripts']['send_notification_period']['period_end'])) return;
+
+        dd('1');
 
         $scripts = $this->scripts_repository->getNextScripts();
 
@@ -207,7 +209,7 @@ class SupportBotScript
                 $result = $this->getResultForNotificationScript($script);
 
                 if (!empty($result)) {
-                    $script->send_message_at = $this->getDateTimeCorrectionForWorkingHours(now()->addMinutes(1));
+                    $script->send_message_at = now()->addMinutes(1);
                 }
 
             } else {
@@ -313,7 +315,7 @@ class SupportBotScript
 
         if($now->diffInMinutes($last_message_datetime) < 1) {
 
-            $script->send_message_at = $this->getDateTimeCorrectionForWorkingHours($last_message_datetime->addMinutes(1));
+            $script->send_message_at = $last_message_datetime->addMinutes(1);
             $script->save();
 
             return false;
@@ -508,34 +510,7 @@ class SupportBotScript
      */
     private function planningPendingScripts($search_id)
     {
-        $this->scripts_repository->addRecord($search_id, $this->getDateTimeCorrectionForWorkingHours(now()->addMinutes(1)));
-    }
-
-    /**
-     * Корректировка даты-времени под рабочие часы отправки уведомлений.
-     *
-     * @param \Carbon\Carbon $datetime
-     */
-    private function getDateTimeCorrectionForWorkingHours(Carbon $datetime)
-    {
-        $time = $datetime->format('H:i');
-
-        $time_begin = $this->config['scripts']['send_notification_period']['period_begin'];
-        $time_end = $this->config['scripts']['send_notification_period']['period_begin'];
-
-        if(!$this->checkTime($time, $time_begin, $time_end)) {
-
-            if($time > $time_end) {
-                $datetime->addDays(1);
-            }
-
-            $time_begin = explode(':', $time_begin);
-
-            $datetime->hour = $time_begin[0];
-            $datetime->minute = $time_begin[1];
-        }
-
-        return $datetime;
+        $this->scripts_repository->addRecord($search_id, now()->addMinutes(1));
     }
 
     /**
