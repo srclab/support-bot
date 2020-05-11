@@ -61,10 +61,10 @@ class SupportBotScript
         }
 
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
-        $script = $this->scripts_repository->findBy(['client_id' => $data['client']['clientId']]);
+        $script = $this->scripts_repository->findBy(['client_id' => $data['client']['searchId']]);
 
         if(is_null($script)) {
-            $this->planningPendingScripts($data['client']['clientId']);
+            $this->planningPendingScripts($data['client']['searchId']);
         } else {
             if($script->step == 1) {
                 $script->delete();
@@ -179,7 +179,7 @@ class SupportBotScript
             /**
              * Отправка сообщения пользователю.
              */
-            $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+            $this->online_consultant->sendMessage($dialog['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result));
 
             return true;
 
@@ -220,17 +220,17 @@ class SupportBotScript
 
                 $script->save();
 
-                $this->online_consultant->sendMessage($script->client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+                $this->online_consultant->sendMessage($result['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result['result']));
 
             }
         }
     }
 
     /**
-     * Получение сообщения для сценария уточнения.
+     * Получение сообщения и ID клиента для сценария уточнения.
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
-     * @return false|string
+     * @return false|array
      */
     private function getResultForClarificationScript($script)
     {
@@ -282,14 +282,14 @@ class SupportBotScript
             return false;
         }
 
-        return $result;
+        return ['clientId' => $dialog['clientId'], 'result' => $result];
     }
 
     /**
-     * Получение сообщения для сценария уведомления.
+     * Получение сообщения и ID клиента для сценария уведомления.
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
-     * @return false|string
+     * @return false|array
      */
     private function getResultForNotificationScript($script)
     {
@@ -309,7 +309,7 @@ class SupportBotScript
         $now = Carbon::now();
         $last_message_datetime = Carbon::parse(end($messages)['dateTime']);
 
-        if($now->diffInMinutes($last_message_datetime) < 3) {
+        if($now->diffInMinutes($last_message_datetime) < 1) {
 
             $script->send_message_at = $last_message_datetime->addMinutes(1);
             $script->save();
@@ -355,7 +355,7 @@ class SupportBotScript
             return false;
         }
 
-        return $result;
+        return ['clientId' => $dialog['clientId'], 'result' => $result];
     }
 
     /**
@@ -374,7 +374,7 @@ class SupportBotScript
         $filter = [
             'period' => [$start_date, $end_date],
             'client' => [
-                'clientId' => $client_id,
+                'searchId' => (int) $client_id,
             ],
         ];
 
