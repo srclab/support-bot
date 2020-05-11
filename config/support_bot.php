@@ -65,6 +65,10 @@ return [
         'exceptions_table_name' => 'support_bot_pending_exceptions',
         'select_message' => '(?:https:\/\/vse-sdal.com\/promo|https:\/\/vse-sdal.com\/onlajn-pomoshch|http:\/\/taplink.cc\/vsesdal_official)',
         'enabled_for_user_ids' => [],
+        'send_notification_period' => [
+            'period_begin' => '10:00',
+            'period_end' => '22:00',
+        ],
         'notification' => [
             'message' => 'Здравствуйте!🤗  Не так давно вы обращались к нам для выполнения задания
                           Удалось ли вам разместить заказ на сайте?
