@@ -56,6 +56,13 @@ class SupportBot
      */
     public function processWebhook(array $data)
     {
+        if(!empty($this->config['scripts']['enabled']) && !empty($data['client']['searchId'])) {
+            /**
+             * Планирование отложенного сценария для удержания пользователя.
+             */
+            if($this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['searchId'])) return;
+        }
+
         /**
          * Автоответчик.
          */
@@ -71,16 +78,16 @@ class SupportBot
         }
 
         /**
-         * Проверка периода активности бота.
+         * Проверка полученных данных, определение возможности сформировать ответ.
          */
-        if(!$this->checkActivePeriod()) {
+        if(!$this->checkWebhookData($data)) {
             return;
         }
 
         /**
-         * Проверка полученных данных, определение возможности сформировать ответ.
+         * Проверка периода активности бота.
          */
-        if(!$this->checkWebhookData($data)) {
+        if(!$this->checkActivePeriod()) {
             return;
         }
 
@@ -89,13 +96,6 @@ class SupportBot
          */
         if($this->config['deferred_answer_after_welcome'] ?? false) {
             $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
-        }
-
-        if(!empty($this->config['scripts']['enabled']) && !empty($data['client']['searchId'])) {
-            /**
-             * Планирование отложенного сценария для удержания пользователя.
-             */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['searchId'])) return;
         }
 
         /**

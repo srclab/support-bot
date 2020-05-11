@@ -195,8 +195,6 @@ class SupportBotScript
          */
         if(!$this->checkTime(Carbon::now()->format('H:i'), $this->config['scripts']['send_notification_period']['period_begin'], $this->config['scripts']['send_notification_period']['period_end'])) return;
 
-        dd('1');
-
         $scripts = $this->scripts_repository->getNextScripts();
 
         if($scripts->isEmpty()) return;
