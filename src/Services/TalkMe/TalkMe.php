@@ -163,7 +163,7 @@ class TalkMe implements OnlineConsultant
         curl_close($ch);
 
         if (!$response || $http_code != 200) {
-            Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API - '.$api_method.' - Данные '.serialize($data), ['http_code' => $http_code, 'response' => $response]);
+            Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API: '.$api_method.', Данные: ( '.json_encode($data).' )', ['http_code' => $http_code, 'response' => $response]);
             return false;
         }
 
@@ -173,7 +173,7 @@ class TalkMe implements OnlineConsultant
         $response = json_decode($response, true);
 
         if(empty($response['ok'])) {
-            Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API - '.$api_method.' - Данные '.serialize($data), ['response' => $response]);
+            Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API: '.$api_method.', Данные: ( '.json_encode($data).' )', ['response' => $response]);
             return false;
         }
 
