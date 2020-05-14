@@ -263,7 +263,7 @@ class SupportBotScript
             }
 
             if (!empty($script_message_id)) {
-                for ($i = ($script_message_id + 1); $i < (array_key_last($messages) + 1); $i++) {
+                for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
 
                     if ($messages[$i]['whoSend'] == 'client') {
                         $is_client_sent_message = true;
@@ -406,7 +406,7 @@ class SupportBotScript
 
                 $select_message .= $this->deleteControlCharactersAndSpaces(quotemeta($variant['message']));
 
-                if ($key != array_key_last($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants'])) {
+                if ($key != (count($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants']) - 1)) {
                     $select_message .= '|';
                 }
             }
@@ -427,7 +427,7 @@ class SupportBotScript
         $client_messages = '';
 
         if (!empty($script_message_id)) {
-            for ($i = ($script_message_id + 1); $i < (array_key_last($messages) + 1); $i++) {
+            for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
 
                 if ($messages[$i]['whoSend'] == 'client') {
 
