@@ -1,8 +1,9 @@
 <?php
 
-namespace SrcLab\SupportBot\Services;
+namespace SrcLab\SupportBot\Services\TalkMe;
 
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 
@@ -50,7 +51,7 @@ class TalkMe implements OnlineConsultant
         /**
          * Основные параметры запроса, если они были переданы.
          */
-        $data = array_except($filter, 'period');
+        $data = Arr::except($filter, 'period');
 
         if($date_end->diffInDays($date_start) <= 14) {
 

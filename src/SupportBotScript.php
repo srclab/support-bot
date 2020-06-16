@@ -83,9 +83,9 @@ class SupportBotScript
      */
     public function processScript($script)
     {
-        if(empty($this->config['scripts']['clarification']['steps'][$script->step])) return;
-
-        if($script->send_message_at > now()) return;
+        if(empty($this->config['scripts']['clarification']['steps'][$script->step]) || $script->send_message_at > now()) {
+            return false;
+        }
 
         /**
          * Получение сообщений с пользователем.
@@ -193,7 +193,9 @@ class SupportBotScript
         /**
          * Проверка является ли текущее время рабочим временем отправки уведомлений.
          */
-        if(!$this->checkTime(Carbon::now()->format('H:i'), $this->config['scripts']['send_notification_period']['period_begin'], $this->config['scripts']['send_notification_period']['period_end'])) return;
+        if(!$this->checkTime(Carbon::now()->format('H:i'), $this->config['scripts']['send_notification_period']['period_begin'], $this->config['scripts']['send_notification_period']['period_end'])) {
+            return;
+        }
 
         $scripts = $this->scripts_repository->getNextScripts();
 
@@ -219,7 +221,6 @@ class SupportBotScript
             if (!empty($result)) {
 
                 $script->step++;
-
                 $script->save();
 
                 $this->online_consultant->sendMessage($result['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result['result']));
@@ -514,7 +515,7 @@ class SupportBotScript
     /**
      * Проверка времени на содержание в текущем интвервале.
      *
-     * @param \Carbon\Carbon $time
+     * @param string $time
      * @param string $time_begin
      * @param string $time_end
      * @return bool

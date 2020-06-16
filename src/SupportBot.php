@@ -3,6 +3,7 @@
 namespace SrcLab\SupportBot;
 
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
@@ -200,7 +201,7 @@ class SupportBot
         /**
          * Подсчет и добавление общего количества сообщений от менеджеров по дням.
          */
-        $messages = array_reduce(array_pluck($messages, 'messages'), 'array_merge', []);
+        $messages = array_reduce(Arr::pluck($messages, 'messages'), 'array_merge', []);
 
         $messages = collect($messages);
 

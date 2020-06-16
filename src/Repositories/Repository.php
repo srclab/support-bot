@@ -1,6 +1,5 @@
 <?php
 
-
 namespace SrcLab\SupportBot\Repositories;
 
 abstract class Repository
