@@ -4,7 +4,6 @@ namespace SrcLab\SupportBot\Repositories;
 
 use SrcLab\SupportBot\Models\SupportScriptExceptionModel as SupportScriptExceptionModel;
 use Illuminate\Support\Facades\Cache;
-use DB;
 
 class SupportScriptExceptionRepository extends Repository
 {
@@ -35,7 +34,7 @@ class SupportScriptExceptionRepository extends Repository
      */
     public function getAllException()
     {
-        return Cache::remember('script_exception', 24 * 60 * 60, function () {
+        return Cache::remember('support_bot:script_exception', 24 * 60 * 60, function () {
             return $this->getAll();
         });
     }
