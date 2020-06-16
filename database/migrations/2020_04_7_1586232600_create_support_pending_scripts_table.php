@@ -15,7 +15,7 @@ class CreateSupportPendingScriptsTable extends Migration
     {
         Schema::create(app_config('support_bot.scripts.table_name'), function (Blueprint $table) {
             $table->increments('id');
-            $table->string('client_id', 32);
+            $table->unsignedBigInteger('search_id');
             $table->tinyInteger('step')->default(0);
             $table->tinyInteger('prev_step')->nullable();
             $table->dateTime('send_message_at');
