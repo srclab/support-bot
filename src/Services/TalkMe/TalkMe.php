@@ -1,6 +1,6 @@
 <?php
 
-namespace SrcLab\SupportBot\Services;
+namespace SrcLab\SupportBot\Services\TalkMe;
 
 use Carbon\Carbon;
 use Illuminate\Support\Facades\Log;

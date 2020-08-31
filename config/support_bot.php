@@ -61,7 +61,7 @@ return [
      */
     'scripts' => [
         'enabled' => env('SRCLAB_SUPPORT_BOT_SCRIPT_ENABLED', false),
-        'table_name' => 'support_bot_pending_sripts',
+        'table_name' => 'support_bot_pending_scripts',
         'exceptions_table_name' => 'support_bot_pending_exceptions',
         'select_message' => '(?:https:\/\/vse-sdal.com\/promo|https:\/\/vse-sdal.com\/onlajn-pomoshch|http:\/\/taplink.cc\/vsesdal_official)',
         'enabled_for_user_ids' => [],
