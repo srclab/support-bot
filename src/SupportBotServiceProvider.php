@@ -46,7 +46,7 @@ class SupportBotServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, \SrcLab\SupportBot\Services\TalkMe::class);
+        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, \SrcLab\SupportBot\Services\TalkMe\TalkMe::class);
     }
 
 }
