@@ -16,7 +16,7 @@ class CreateSupportScriptsExceptionsTable extends Migration
      */
     public function __construct()
     {
-        $this->table_name = app_config('support_bot.scripts.exceptions_table_name');;
+        $this->table_name = app_config('support_bot.scripts.exceptions_table_name');
     }
 
     /**
