@@ -14,6 +14,16 @@ return [
 
     /*
      |--------------------------------------------------------------------------
+     | Используемый мессенджер
+     |--------------------------------------------------------------------------
+     |
+     | Варианты: talkme, webim
+     |
+     */
+    'messenger' => 'talkme',
+
+    /*
+     |--------------------------------------------------------------------------
      | Настройка автоответчика
      |--------------------------------------------------------------------------
      |
@@ -206,6 +216,11 @@ return [
             'api_token' => env('SRCLAB_SUPPORT_BOT_TALK_ME_API_TOKEN', ''),
             'webhook_secret' => env('SRCLAB_SUPPORT_BOT_TALK_ME_WEBHOOK_SECRET', ''),
             'default_operator' => env('SRCLAB_SUPPORT_BOT_TALK_ME_DEFAULT_OPERATOR', ''),
+        ],
+        'webim' => [
+            'api_token' => env('SRCLAB_SUPPORT_BOT_WEBIM_API_TOKEN', ''),
+            'webhook_secret' => env('SRCLAB_SUPPORT_BOT_WEBIM_WEBHOOK_SECRET', ''),
+            'default_operator' => env('SRCLAB_SUPPORT_BOT_WEBIM_DEFAULT_OPERATOR', ''),
         ],
 
     ],

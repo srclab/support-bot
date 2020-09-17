@@ -35,7 +35,7 @@ class SupportBotScript
     public function __construct()
     {
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
-        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
+        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config]);
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
     }
@@ -420,7 +420,7 @@ class SupportBotScript
 
                 if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
                     $script_message_id = $key;
-                    //break;
+                    break;
                 }
             }
         }

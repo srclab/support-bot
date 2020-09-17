@@ -4,6 +4,8 @@ namespace SrcLab\SupportBot;
 
 use Illuminate\Support\ServiceProvider;
 use SrcLab\SupportBot\Commands\ClearExceptionScriptsCache;
+use SrcLab\SupportBot\Services\Messengers\TalkMe\TalkMe;
+use SrcLab\SupportBot\Services\Messengers\Webim\Webim;
 
 class SupportBotServiceProvider extends ServiceProvider
 {
@@ -46,7 +48,16 @@ class SupportBotServiceProvider extends ServiceProvider
      */
     public function register()
     {
-        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, \SrcLab\SupportBot\Services\TalkMe\TalkMe::class);
+        $config = array_merge(config('support_bot'), app_config('support_bot'));
+
+        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, function($app) use($config)
+        {
+            if($config['messenger'] == 'webim') {
+                return app(Webim::class, ['config' => $config]);
+            } else {
+                return app(TalkMe::class, ['config' => $config]);
+            }
+        });
     }
 
 }
