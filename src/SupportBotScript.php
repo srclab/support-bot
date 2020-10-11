@@ -35,7 +35,7 @@ class SupportBotScript
     public function __construct()
     {
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
-        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config]);
+        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']]);
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
     }
@@ -245,33 +245,15 @@ class SupportBotScript
 
         $dialog = array_shift($dialog);
 
-        $client_name = $dialog['name'];
+        $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
 
-        $messages = $dialog['messages'];
+        $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
 
         if(empty($messages)) {
             $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
         } else {
 
-            foreach ($messages as $key => $message) {
-                if ($message['whoSend'] == 'operator') {
-
-                    if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($this->config['scripts']['notification']['message'])) {
-                        $script_message_id = $key;
-                        //break;
-                    }
-                }
-            }
-
-            if (!empty($script_message_id)) {
-                for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
-
-                    if ($messages[$i]['whoSend'] == 'client') {
-                        $is_client_sent_message = true;
-                    }
-
-                }
-            }
+            $is_client_sent_message = $this->online_consultant->isClientSentMessageAfterOperatorMessage($this->config['scripts']['notification']['message'], $messages);
 
             if (empty($is_client_sent_message)) {
                 $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
@@ -302,9 +284,12 @@ class SupportBotScript
             return false;
         }
 
+        /**
+         * TODO: переделать TalkMe чтобы убрать array_shift.
+         */
         $dialog = array_shift($dialog);
 
-        $messages = $dialog['messages'];
+        $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
 
         /**
          * Проверка на разницу последнего сообщения с текущим временем в 3 часа при отправке уведомления.
@@ -324,17 +309,8 @@ class SupportBotScript
          * Получение исключений.
          */
         $exceptions = $this->scripts_exception_repository->getAllException();
-
-        $operator_messages = '';
-        $client_messages = '';
-
-        foreach ($messages as $message) {
-            if ($message['whoSend'] == 'operator') {
-                $operator_messages .= $message['text'];
-            } else {
-                $client_messages .= $message['text'];
-            }
-        }
+        
+        $operator_messages = $this->online_consultant->findOperatorMessages($messages);
 
         if (preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
 
@@ -376,12 +352,9 @@ class SupportBotScript
          */
         $filter = [
             'period' => [$start_date, $end_date],
-            'client' => [
-                'searchId' => $search_id,
-            ],
         ];
 
-        $dialog =  $this->online_consultant->getMessages($filter);
+        $dialog =  $this->online_consultant->getDialogFromClient($search_id, $filter);
 
         return empty($dialog) ? false : $dialog;
     }
@@ -415,36 +388,20 @@ class SupportBotScript
             $select_message .= ')';
         }
 
-        foreach ($messages as $key => $message) {
-            if ($message['whoSend'] == 'operator') {
-
-                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
-                    $script_message_id = $key;
-                    break;
-                }
-            }
-        }
+        $script_message_id = $this->findMessageFromOperator($select_message, $messages);
 
         $client_messages = '';
 
         if (!empty($script_message_id)) {
-            for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
+            $client_messages = $this->online_consultant->getClientMessagesIfNoOperatorMessages($messages, ($script_message_id + 1));
 
-                if ($messages[$i]['whoSend'] == 'client') {
+            /**
+             * Удаление скрипта в случае если диалог подхватил реальный оператор.
+             */
+            if($client_messages === false) {
+                $script->delete();
 
-                    $client_messages .= $messages[$i]['text'];
-                } elseif(empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage')) {
-
-                    /**
-                     * Удаление скрипта в случае если диалог подхватил реальный оператор.
-                     */
-                    $script->delete();
-
-                    return false;
-                    break;
-
-                }
-
+                return false;
             }
         }
 

@@ -29,11 +29,18 @@ class SupportBotController extends BaseController
      */
     public function support_bot($secret = null)
     {
+        $config = array_merge(config('support_bot'), app_config('support_bot'));
+
         $post_data = $this->request->getContent();
 
         if (!empty($post_data)) {
             $post_data = json_decode($post_data, true);
-            app(\SrcLab\SupportBot\SupportBot::class)->processWebhook(!empty($secret) ? array_merge($post_data, ['secretKey' => $secret]): $post_data);
+
+            $result = app(\SrcLab\SupportBot\SupportBot::class)->processWebhook(! empty($secret) ? array_merge($post_data, ['secretKey' => $secret]) : $post_data);
+
+            if($config['online_consultant'] == 'webim' && $result) {
+                return response()->json(['result' => 'ok']);
+            }
         }
     }
 }

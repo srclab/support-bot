@@ -84,7 +84,7 @@ class TalkMe implements OnlineConsultant
         /**
          * Формирование автоответа.
          */
-        list($answer_index, $answer) = $this->getAnswer($data);
+        [$answer_index, $answer] = $this->getAnswer($data);
 
         if(empty($answer)) {
             return;
@@ -310,9 +310,14 @@ class TalkMe implements OnlineConsultant
         return true;
     }
 
-    public function getMessagesFromClient($client_id, array $period = [])
+    public function getDialogFromClient($client_id, array $period = [])
     {
-        // TODO: Implement getMessagesFromClient() method.
+        $result = $this->getMessages([
+            'period' => $period,
+            'client' => [
+                'searchId' => $client_id
+            ],
+        ]);
     }
 
     /**
@@ -336,6 +341,61 @@ class TalkMe implements OnlineConsultant
             default:
                 return null;
         }
+    }
+
+    /**
+     * Получение параметров диалога.
+     *
+     * @param string $param
+     * @param array $dialog
+     * @return mixed
+     */
+    public function getParamFromDialog($param, array $dialog)
+    {
+        switch($param) {
+            case 'name':
+                return $dialog['name'] ?? null;
+                break;
+            case 'messages':
+                return $dialog['messages'];
+                break;
+            default:
+                throw new Exception('Неизвестная переменная для получения из данных диалога.');
+        }
+    }
+
+    /**
+     * Проверка отправил ли клиент сообщение после сообщения оператора.
+     *
+     * @param string $message_text
+     * @param array $messages
+     * @return bool
+     */
+    public function isClientSentMessageAfterOperatorMessage($message_text, array $messages)
+    {
+        $is_client_sent_message = false;
+
+        foreach ($messages as $key => $message) {
+            if ($message['whoSend'] == 'operator') {
+
+                if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($message_text)) {
+                    $script_message_id = $key;
+                    break;
+                }
+            }
+        }
+
+        if (!empty($script_message_id)) {
+            for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
+
+                if ($messages[$i]['whoSend'] == 'client') {
+                    $is_client_sent_message = true;
+                }
+
+            }
+        }
+
+        return $is_client_sent_message;
     }
 
     public function getOperatorMessages($client_id, array $period)
@@ -372,5 +432,85 @@ class TalkMe implements OnlineConsultant
         }
 
         return true;
+    }
+
+    /**
+     * Поиск сообщения от оператора.
+     *
+     * @param string $select_message
+     * @param array $messages
+     * @return int|null
+     */
+    public function findMessageFromOperator($select_message, array $messages)
+    {
+        foreach ($messages as $key => $message) {
+            if ($message['whoSend'] == 'operator') {
+
+                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
+                    $script_message_id = $key;
+                    break;
+                }
+            }
+        }
+
+        return $script_message_id ?? null;
+    }
+
+    /**
+     * Получение сообщений клиента если нет сообщений оператора.
+     *
+     * @param array $messages
+     * @param int $offset
+     * @return false|string
+     */
+    public function getClientMessagesIfNoOperatorMessages(array $messages, $offset = 0)
+    {
+        $client_messages = '';
+
+        for ($i = ($offset + 1); $i < count($messages); $i++) {
+
+            if ($messages[$i]['whoSend'] == 'client') {
+
+                $client_messages .= $messages[$i]['text'];
+            } elseif(empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage')) {
+
+                return false;
+                break;
+
+            }
+
+        }
+
+        return $client_messages;
+    }
+
+    /**
+     * Поиск сообщений оператора.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findOperatorMessages(array $messages)
+    {
+        $operator_messages = '';
+
+        foreach ($messages as $message) {
+            if ($message['whoSend'] == 'operator') {
+                $operator_messages .= $message['message'];
+            }
+        }
+
+        return $operator_messages;
+    }
+
+    /**
+     * Удаление управляющих символов и пробелов из строки.
+     *
+     * @param string $string
+     * @return string
+     */
+    private function deleteControlCharactersAndSpaces($string)
+    {
+        return preg_replace('/[\x00-\x1F\x7F\s]/', '', $string);
     }
 }

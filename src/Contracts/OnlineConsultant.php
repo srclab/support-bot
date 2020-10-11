@@ -54,7 +54,7 @@ interface OnlineConsultant
      * @param array $period
      * @return array
      */
-    public function getMessagesFromClient($client_id, array $period = []);
+    public function getDialogFromClient($client_id, array $period = []);
 
     /**
      * Получение списка сообщений за период.
@@ -81,4 +81,47 @@ interface OnlineConsultant
      */
     public function getParamFromDataWebhook($param, array $data);
 
+    /**
+     * Получение параметров диалога.
+     *
+     * @param string $param
+     * @param array $dialog
+     * @return mixed
+     */
+    public function getParamFromDialog($param, array $dialog);
+
+    /**
+     * Поиск сообщения от оператора.
+     *
+     * @param string $select_message
+     * @param array $messages
+     * @return int|null
+     */
+    public function findMessageFromOperator($select_message, array $messages);
+
+    /**
+     * Получение сообщений клиента если нет сообщений оператора.
+     *
+     * @param array $messages
+     * @param int $offset
+     * @return false|string
+     */
+    public function getClientMessagesIfNoOperatorMessages(array $messages, $offset = 0);
+
+    /**
+     * Проверка отправил ли клиент сообщение после сообщения оператора.
+     *
+     * @param string $message_text
+     * @param array $messages
+     * @return bool
+     */
+    public function isClientSentMessageAfterOperatorMessage($message_text, array $messages);
+
+    /**
+     * Поиск сообщений оператора.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findOperatorMessages(array $messages);
 }

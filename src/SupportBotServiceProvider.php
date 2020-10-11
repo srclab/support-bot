@@ -52,10 +52,10 @@ class SupportBotServiceProvider extends ServiceProvider
 
         $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, function($app) use($config)
         {
-            if($config['messenger'] == 'webim') {
-                return app(Webim::class, ['config' => $config]);
+            if($config['online_consultant'] == 'webim') {
+                return app(Webim::class, ['config' => $config['accounts']]);
             } else {
-                return app(TalkMe::class, ['config' => $config]);
+                return app(TalkMe::class, ['config' => $config['accounts']]);
             }
         });
     }

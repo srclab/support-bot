@@ -61,58 +61,67 @@ class SupportBot
          * Проверка полученных данных, определение возможности сформировать ответ.
          */
         if(!$this->online_consultant->checkWebhookData($data)) {
-            return;
+            return false;
         }
 
         /**
          * Проверка фильтра пользователей по id на сайте.
          */
         if(!$this->online_consultant->checkEnabledUserIds($this->config['enabled_for_user_ids'], $data)) {
-            return;
+            return false;
         }
 
-        $search_id = $this->online_consultant->getParamFromDataWebhook($data, 'search_id');
+        $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
 
         if(!empty($this->config['scripts']['enabled']) && !empty($search_id)) {
             /**
              * Планирование отложенного сценария для удержания пользователя.
              */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($search_id)) return;
+            if($this->support_bot_scripts->planingOrProcessScriptForUser($search_id)) {
+                return true;
+            }
+        }
+
+        /**
+         * В инстаграм не отвечать.
+         */
+        if(!empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
+            return false;
         }
 
         /**
          * Автоответчик.
          */
         if($this->autoResponder($data)) {
-            return;
+            return true;
         }
 
         /**
          * Бот отключен.
          */
         if(!$this->config['enabled']) {
-            return;
+            return false;
         }
 
         /**
          * Проверка наличия оператора.
          */
         if(!$this->online_consultant->checkOperator($data)) {
-            return;
+            return false;
         }
 
         /**
          * Проверка периода активности бота.
          */
         if(!$this->checkActivePeriod()) {
-            return;
+            return false;
         }
 
         /**
          * Удаление отложенных сообщений, если пользователь написал что-либо после приветствия.
          */
         if($this->config['deferred_answer_after_welcome'] ?? false) {
-            $client_id = $this->online_consultant->getParamFromDataWebhook($data, 'client_id');
+            $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
 
             $this->messages_repository->deleteDeferredMessagesByClient($client_id);
         }
@@ -123,21 +132,21 @@ class SupportBot
         list($answer_index, $answer) = $this->getAnswer($data);
 
         if(empty($answer)) {
-            return;
+            return false;
         }
 
-        $client_id = $this->online_consultant->getParamFromDataWebhook($data, 'client_id');
+        $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
 
         /**
          * Отправка сообщения.
          */
-        $this->sendMessage($client_id, $answer, $this->online_consultant->getParamFromDataWebhook($data, 'operator_login'));
+        $this->sendMessage($client_id, $answer, $this->online_consultant->getParamFromDataWebhook('operator_login', $data));
 
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
          */
-        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $this->getParamFromDataWebhook($data. 'message_text'))) {
-            $this->messages_repository->addRecord($client_id, $this->online_consultant->getParamFromDataWebhook($data, 'operator_login'), 'Чем я могу вам помочь?', now()->addMinutes(2));
+        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $this->online_consultant->getParamFromDataWebhook('message_text', $data))) {
+            $this->messages_repository->addRecord($client_id, $this->online_consultant->getParamFromDataWebhook('operator_login', $data), 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
 
         /**
@@ -150,6 +159,7 @@ class SupportBot
          */
         $this->writeJustSentAnswerToday($answer_index, $client_id);
 
+        return true;
     }
 
     /**
@@ -409,7 +419,7 @@ class SupportBot
      */
     public function alreadySaidHello(array $data)
     {
-        $search_id = $this->online_consultant->getParamFromDataWebhook('search_id');
+        $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
 
         $cache_key = 'SupportBot:AlreadySaidHello:'.$search_id;
 
@@ -522,11 +532,11 @@ class SupportBot
      */
     protected function autoResponder(array $data)
     {
+        $auto_responder_config = $this->config['auto_responder'];
+
         /**
          * Автоответчик выключен.
          */
-        $auto_responder_config = $this->config['auto_responder'];
-
         if(empty($auto_responder_config['enabled'])) {
             return false;
         }
@@ -557,24 +567,20 @@ class SupportBot
         }
 
         /**
-         * В инстаграм не отвечать.
-         */
-        if(!empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
-            return true;
-        }
-
-        /**
          * Сегодня уже был отправлен автоответ.
          */
         $cache_key = 'SupportBot:TodayJustSentAutoRespond';
 
         $just_sent_clients = $this->cache->get($cache_key, []);
 
-        $client_id = $this->online_consultant->getParamFromDataWebhook($data, 'client_id');
+        $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
 
-        if(!empty($just_sent_clients[$data[$client_id]])) {
-            return true;
-        }
+        /**
+         * TODO: возвращало true ( проверить правильно ли работает )
+         */
+        /*if(!empty($just_sent_clients[$client_id])) {
+            return false;
+        }*/
 
         /**
          * Отправка автоответа.
