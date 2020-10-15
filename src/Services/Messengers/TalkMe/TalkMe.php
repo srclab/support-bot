@@ -513,4 +513,27 @@ class TalkMe implements OnlineConsultant
     {
         return preg_replace('/[\x00-\x1F\x7F\s]/', '', $string);
     }
+
+    /**
+     * Получение даты и времени последнего сообщения клиента.
+     *
+     * @param array $dialog
+     * @return \Carbon\Carbon|false
+     */
+    public function getDateTimeClientLastMessage($dialog)
+    {
+        $i = count($dialog['messages'])-1;
+        $message = $dialog['messages'][$i];
+
+        while($i >= 0 && $dialog['messages'][$i]['whoSend'] != 'client') {
+            $message = $dialog['messages'][$i];
+            $i--;
+        }
+
+        if($message['whoSend'] != 'client') {
+            return false;
+        }
+
+        return Carbon::parse($message['dateTime']);
+    }
 }

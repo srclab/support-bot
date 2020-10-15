@@ -91,6 +91,14 @@ interface OnlineConsultant
     public function getParamFromDialog($param, array $dialog);
 
     /**
+     * Получение даты и времени последнего сообщения клиента.
+     *
+     * @param array $dialog
+     * @return \Carbon\Carbon|false
+     */
+    public function getDateTimeClientLastMessage($dialog);
+
+    /**
      * Поиск сообщений оператора.
      *
      * @param array $messages

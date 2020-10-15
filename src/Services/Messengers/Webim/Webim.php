@@ -265,14 +265,14 @@ class Webim implements OnlineConsultant
                 break;
             }
 
-            if($date_start <= Carbon::parse($message['created_at']) && in_array(['VISITOR', 'OPERATOR'], $message['kind'])) {
+            if($date_start <= Carbon::parse($message['created_at']) && in_array($message['kind'], ['VISITOR', 'OPERATOR'])) {
                 $messages[] = $message;
             }
         }
 
         $dialog['chat']['messages'] = $messages;
 
-        return $messages['chat'];
+        return $dialog['chat'];
     }
 
     public function getDialogsByPeriod(array $period)
@@ -435,6 +435,29 @@ class Webim implements OnlineConsultant
         }
 
         return true;
+    }
+
+    /**
+     * Получение даты и времени последнего сообщения клиента.
+     *
+     * @param array $dialog
+     * @return \Carbon\Carbon|false
+     */
+    public function getDateTimeClientLastMessage($dialog)
+    {
+        $i = count($dialog['messages'])-1;
+        $message = $dialog['messages'][$i];
+
+        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['VISITOR', 'FILE_VISITOR', 'KEYBOARD_RESPONSE'])) {
+            $message = $dialog['messages'][$i];
+            $i--;
+        }
+
+        if(!in_array($message['kind'], ['VISITOR', 'FILE_VISITOR', 'KEYBOARD_RESPONSE'])) {
+            return false;
+        }
+
+        return Carbon::parse($message['created_at']);
     }
 
     /**

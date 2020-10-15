@@ -63,10 +63,8 @@ class SupportBotScript
         if(is_null($script)) {
             $this->planningPendingScripts($search_id);
         } else {
-            if($script->step == 1) {
-                $script->delete();
-            } else {
-                if($this->processScript($script)) {
+            if($script->step > 0) {
+                if ($this->processScript($script)) {
                     return true;
                 }
             }
@@ -204,19 +202,21 @@ class SupportBotScript
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
         foreach($scripts as $script) {
 
-            if ($script->step == 0) {
+            /**
+             * Проверка времени последнего сообщения клиента.
+             */
+            $dialog = $this->online_consultant->getDialogFromClient($script->search_id);
 
-                $result = $this->getResultForNotificationScript($script);
+            $datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);
 
-                if (!empty($result)) {
-                    $script->send_message_at = now()->addMinutes(1);
-                }
-
-            } else {
-
-                $result = $this->getResultForClarificationScript($script);
-
+            /** @var \Carbon\Carbon $datetime_message_client */
+            if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
+                $script->send_message_at = $datetime_message_client->addHour(3);
+                $script->save();
+                continue;
             }
+
+            $result = $this->getResultForClarificationScript($script);
 
             if (!empty($result)) {
 
@@ -257,73 +257,6 @@ class SupportBotScript
 
             if (empty($is_client_sent_message)) {
                 $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
-            }
-        }
-
-        if(empty($result)) {
-
-            $script->delete();
-
-            return false;
-        }
-
-        return ['clientId' => $dialog['clientId'], 'result' => $result];
-    }
-
-    /**
-     * Получение сообщения и ID клиента для сценария уведомления.
-     *
-     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
-     * @return false|array
-     */
-    private function getResultForNotificationScript($script)
-    {
-        $dialog = $this->getClientDialog($script->search_id, Carbon::now()->subDays(1), Carbon::now()->endOfDay());
-
-        if(!$dialog) {
-            return false;
-        }
-
-        /**
-         * TODO: переделать TalkMe чтобы убрать array_shift.
-         */
-        $dialog = array_shift($dialog);
-
-        $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
-
-        /**
-         * Проверка на разницу последнего сообщения с текущим временем в 3 часа при отправке уведомления.
-         */
-        $now = Carbon::now();
-        $last_message_datetime = Carbon::parse(end($messages)['dateTime']);
-
-        if($now->diffInMinutes($last_message_datetime) < 1) {
-
-            $script->send_message_at = $last_message_datetime->addMinutes(1);
-            $script->save();
-
-            return false;
-        }
-
-        /**
-         * Получение исключений.
-         */
-        $exceptions = $this->scripts_exception_repository->getAllException();
-        
-        $operator_messages = $this->online_consultant->findOperatorMessages($messages);
-
-        if (preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
-
-            foreach ($exceptions as $exception) {
-
-                if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
-                    $stop_word = true;
-                    break;
-                }
-            }
-
-            if (empty($stop_word)) {
-                $result = $this->config['scripts']['notification']['message'];
             }
         }
 
