@@ -120,7 +120,7 @@ class TalkMe implements OnlineConsultant
      * @param array $filter
      * @return array
      */
-    public function getMessages(array $filter)
+    public function getDialogsByPeriod(array $filter)
     {
         /**
          * Фомирование временных рамок в нужном формате.
@@ -312,7 +312,7 @@ class TalkMe implements OnlineConsultant
 
     public function getDialogFromClient($client_id, array $period = [])
     {
-        $result = $this->getMessages([
+        $result = $this->getDialogsByPeriod([
             'period' => $period,
             'client' => [
                 'searchId' => $client_id
@@ -407,7 +407,7 @@ class TalkMe implements OnlineConsultant
             ]
         ];
 
-        $today_messages = $this->getMessages($filter);
+        $today_messages = $this->getDialogsByPeriod($filter);
 
         $messages = [];
 

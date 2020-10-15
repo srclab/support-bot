@@ -221,7 +221,7 @@ class SupportBot
             'period' => [now()->subDays($cache_days-1)->startOfDay(), Carbon::now()->endOfDay()],
         ];
 
-        $messages = $this->online_consultant->getMessages($filter);
+        $messages = $this->online_consultant->getDialogsByPeriod($filter);
 
         if(empty($messages)) {
             Log::error('[SrcLab\SupportBot] Не удалось получить сообщения для составления статистики отпраки.');

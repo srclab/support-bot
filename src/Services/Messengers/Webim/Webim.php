@@ -275,6 +275,52 @@ class Webim implements OnlineConsultant
         return $messages['chat'];
     }
 
+    public function getDialogsByPeriod(array $period)
+    {
+        /**
+         * Фомирование временных рамок в нужном формате.
+         *
+         * @var \Carbon\Carbon $date_start
+         * @var \Carbon\Carbon $date_end
+         */
+        $date_start = $filter['period'][0] ?? Carbon::now()->startOfDay();
+        $date_end = $filter['period'][1] ?? Carbon::now();
+
+        $chats = [];
+        $more_chats_available = true;
+
+        while($more_chats_available) {
+            $method = "chats?since=".(isset($result['last_ts']) ? $result['last_ts'] : 0);
+
+            $result = $this->sendRequest($method, []);
+
+            $find_chats = false;
+
+            foreach($result['chats'] as $chat) {
+
+                $i = count($chat['state_history'])-2;
+                $state = array_pop($chat['state_history']);
+
+                while(($state['state'] == 'closed' || $state['state'] == 'closed_by_operator') && $i >= 0) {
+                    $state = $chat['state_history'][$i];
+                    $i--;
+                }
+
+                $change_time = Carbon::parse($state['at']);
+                if($change_time >= $date_start && $change_time <= $date_end) {
+                    $chats[] = $chat;
+                    $find_chats = true;
+                }
+            }
+
+            if(!empty($chats) && (!$find_chats && $more_chats_available)) {
+                $more_chats_available = false;
+            }
+        }
+
+        return $chats;
+    }
+
     /**
      * Поиск сообщения от оператора.
      *
@@ -375,11 +421,6 @@ class Webim implements OnlineConsultant
         }
 
         return $operator_messages;
-    }
-
-    public function getMessages(array $period)
-    {
-        // TODO: Implement getMessages() method.
     }
 
     public function getOperatorMessages($client_id, array $period)

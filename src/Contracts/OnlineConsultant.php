@@ -62,7 +62,7 @@ interface OnlineConsultant
      * @param array $period
      * @return array
      */
-    public function getMessages(array $period);
+    public function getDialogsByPeriod(array $period);
 
     /**
      * Получение сообщений оператора в диалоге с пользователем за период.
@@ -91,6 +91,14 @@ interface OnlineConsultant
     public function getParamFromDialog($param, array $dialog);
 
     /**
+     * Поиск сообщений оператора.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findOperatorMessages(array $messages);
+
+    /**
      * Поиск сообщения от оператора.
      *
      * @param string $select_message
@@ -116,12 +124,4 @@ interface OnlineConsultant
      * @return bool
      */
     public function isClientSentMessageAfterOperatorMessage($message_text, array $messages);
-
-    /**
-     * Поиск сообщений оператора.
-     *
-     * @param array $messages
-     * @return array
-     */
-    public function findOperatorMessages(array $messages);
 }
