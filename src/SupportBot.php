@@ -83,9 +83,16 @@ class SupportBot
         }
 
         /**
+         * Задержка чата на боте в случае если на бота чат перекинул оператор.
+         */
+        if($this->config['online_consultant'] == 'webim' && $data['event'] == 'new_chat') {
+            return true;
+        }
+
+        /**
          * В инстаграм не отвечать.
          */
-        if(!empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
+        if($this->config['online_consultant'] == 'talkme' && !empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
             return false;
         }
 
@@ -129,7 +136,7 @@ class SupportBot
         /**
          * Формирование автоответа.
          */
-        list($answer_index, $answer) = $this->getAnswer($data);
+        [$answer_index, $answer] = $this->getAnswer($data);
 
         if(empty($answer)) {
             return false;
@@ -272,6 +279,9 @@ class SupportBot
          */
         $answers = $this->config['auto_answers'];
 
+        /**
+         * TODO: сделать условие если последнее сообщение от оператора не отвечать.
+         */
         $message = $this->online_consultant->getParamFromDataWebhook('message_text', $data);
         $result_answer = '';
         $answer_index = -1;
@@ -358,56 +368,6 @@ class SupportBot
         }
 
         return $this->checkCurrentTime($period['day_beginning'], $period['day_end']);
-    }
-
-    /**
-     * TODO: удалить метод
-     *
-     * Проверка полученных данных в вебхуке, определение возможности сформировать ответ.
-     *
-     * @param array $data
-     * @param bool $check_operator
-     * @return bool
-     */
-    protected function checkWebhookData(array $data, $check_operator = true)
-    {
-        /**
-         * Проверка секретки.
-         */
-        if(!$this->online_consultant->checkSecret($data['secretKey'] ?? null)) {
-            Log::warning('[SrcLab\SupportBot] Получен неверный секретный ключ.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка наличия сообщения.
-         */
-        if(empty($data['message'])) {
-            Log::error('[SrcLab\SupportBot] Сообщение не получено.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка наличия оператора.
-         */
-        if($check_operator && empty($data['operator']['login'])) {
-            Log::error('[SrcLab\SupportBot] Не найден оператор.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка фильтра пользователей по id на сайте.
-         */
-        $only_user_ids = $this->config['enabled_for_user_ids'] ?? [];
-
-        if(!empty($only_user_ids)
-            && (empty($data['client']['customData']['user_id'])
-                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
-        ) {
-            return false;
-        }
-
-        return true;
     }
 
     /**
@@ -578,9 +538,9 @@ class SupportBot
         /**
          * TODO: возвращало true ( проверить правильно ли работает )
          */
-        /*if(!empty($just_sent_clients[$client_id])) {
+        if(!empty($just_sent_clients[$client_id])) {
             return false;
-        }*/
+        }
 
         /**
          * Отправка автоответа.

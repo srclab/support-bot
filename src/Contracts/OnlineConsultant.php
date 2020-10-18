@@ -40,6 +40,16 @@ interface OnlineConsultant
     public function sendMessage($client_id, $message, $operator = null);
 
     /**
+     * Отправка сообщения с кнопками клиенту.
+     *
+     * @param string $client_id
+     * @param array $button_names
+     * @param string $operator
+     * @return bool
+     */
+    public function sendButtonsMessage($client_id, array $button_names, $operator = null);
+
+    /**
      * Проверка секретки.
      *
      * @param string $request_secret
@@ -48,7 +58,7 @@ interface OnlineConsultant
     public function checkSecret($request_secret);
 
     /**
-     * Получение сообщений от клиента.
+     * Получение диалога с клиентом.
      *
      * @param int $client_id
      * @param array $period
@@ -125,6 +135,14 @@ interface OnlineConsultant
     public function getClientMessagesIfNoOperatorMessages(array $messages, $offset = 0);
 
     /**
+     * Поиск сообщений от клиента.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findClientMessages(array $messages);
+
+    /**
      * Проверка отправил ли клиент сообщение после сообщения оператора.
      *
      * @param string $message_text
@@ -132,4 +150,20 @@ interface OnlineConsultant
      * @return bool
      */
     public function isClientSentMessageAfterOperatorMessage($message_text, array $messages);
+
+    /**
+     * Получение списка ид операторов онлайн.
+     *
+     * @return array
+     */
+    public function getListOnlineOperatorsIds();
+
+    /**
+     * Перевод чата на оператора.
+     *
+     * @param int $client_id
+     * @param int $operator_id
+     * @return bool
+     */
+    public function redirectClientToChat($client_id, $operator_id);
 }

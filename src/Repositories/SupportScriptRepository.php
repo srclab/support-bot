@@ -28,7 +28,7 @@ class SupportScriptRepository extends Repository
     {
         return $this->query()
             ->where('send_message_at', '<', Carbon::now())
-            ->whereIn('step', [0, 1])
+            ->where('step', 0)
             ->limit(20)
             ->get();
     }

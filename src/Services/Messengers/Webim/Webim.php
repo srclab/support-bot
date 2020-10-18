@@ -96,10 +96,47 @@ class Webim implements OnlineConsultant
         $data = [
             'chat_id' => $client_id,
             'message' => [
-                'kind' => 'OPERATOR',
-                'message' => $message,
+                'kind' => 'operator',
+                'text' => $message,
             ],
         ];
+
+        return (bool) $this->sendRequest('send_message', $data);
+    }
+
+    /**
+     * Отправка сообщения с кнопками клиенту.
+     *
+     * @param string $client_id
+     * @param array $button_names
+     * @param string $operator
+     * @return bool
+     */
+    public function sendButtonsMessage($client_id, $button_names, $operator = null)
+    {
+        /**
+         * Формирование кнопок.
+         */
+        $buttons = [];
+        foreach($button_names as $button_name) {
+            $buttons[] = [[
+                    'text' => $button_name,
+                    'id' => uniqid()
+            ]];
+        }
+
+        /**
+         * Формирование данных для запроса.
+         */
+        $data = [
+            'chat_id' => $client_id,
+            'message' => [
+                'kind' => 'keyboard',
+                'buttons' => $buttons,
+            ],
+        ];
+
+        //dd($data);
 
         return (bool) $this->sendRequest('send_message', $data);
     }
@@ -124,6 +161,9 @@ class Webim implements OnlineConsultant
      */
     public function getParamFromDataWebhook($param, array $data)
     {
+        /**
+         * TODO: объединить client_id, search_id в одну структуру
+         */
         switch($param) {
             case 'client_id':
                 if($data['event'] == 'new_chat') {
@@ -140,14 +180,23 @@ class Webim implements OnlineConsultant
             case 'message_text':
                 if($data['event'] == 'new_chat') {
                     $message = array_pop($data['messages']);
-                    if(empty($message)) {
-                        return null;
-                    }
-
-                    return $message['text'] ?? null;
                 } else {
-                    return $data['message']['text'] ?? null;
+                    $message = $data['message'];
                 }
+
+                if(empty($message)) {
+                    return null;
+                }
+
+                if($message['kind'] == 'keyboard_response') {
+                    $message_text = $message['data']['text'];
+                } else {
+                    $message_text = $message['text'];
+                }
+
+                return empty($message_text) ? null : $message_text;
+            case 'operator_login':
+                return null;
             default:
                 throw new Exception('Неизвестная переменная для получения из данных webhook.');
         }
@@ -169,6 +218,9 @@ class Webim implements OnlineConsultant
             case 'messages':
                 return $dialog['messages'];
                 break;
+            case 'clientId':
+                return $dialog['id'];
+                break;
             default:
                 throw new Exception('Неизвестная переменная для получения из данных диалога.');
         }
@@ -187,16 +239,30 @@ class Webim implements OnlineConsultant
      */
     protected function sendRequest($api_method, array $data = [])
     {
-        /**
-         * Подготовка данных.
-         */
-        if(!empty($data)) {
-            $data = json_encode($data);
-        }
-
         $ch = curl_init();
 
-        if(strpos($api_method, 'chat') !== false) {
+        $methods = [
+            'GET' => [
+                'chat',
+                'chats',
+                'operators',
+            ],
+            'POST' => [
+                'send_message',
+                'redirect_chat',
+                'close_chat'
+            ]
+        ];
+
+        if(in_array($api_method, $methods['GET'])) {
+
+            /**
+             * Подстановка параметров в запрос.
+             */
+            if(!empty($data)) {
+                $api_method .= '?'.http_build_query($data);
+            }
+
             curl_setopt_array($ch, [
                 CURLOPT_URL => "https://allputru001.webim.ru/api/v2/{$api_method}",
                 CURLOPT_RETURNTRANSFER => 1,
@@ -205,7 +271,14 @@ class Webim implements OnlineConsultant
                     "Content-Type: application/json",
                 ],
             ]);
-        } else {
+        } elseif(in_array($api_method, $methods['POST'])) {
+            /**
+             * Подготовка данных.
+             */
+            if(!empty($data)) {
+                $data = json_encode($data);
+            }
+
             curl_setopt_array($ch, [
                 CURLOPT_URL => "https://allputru001.webim.ru/api/bot/v2/{$api_method}",
                 CURLOPT_POST => true,
@@ -216,9 +289,13 @@ class Webim implements OnlineConsultant
                     "Authorization: Token {$this->config['api_token']}",
                 ]
             ]);
+        } else {
+            throw new Exception("[Webim] Неизвестный запрос к Webim ( $api_method )");
         }
 
         $response = curl_exec($ch);
+
+        //dd($response);
 
         $http_code = intval(curl_getinfo($ch, CURLINFO_HTTP_CODE));
 
@@ -238,7 +315,7 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     *
+     * Получение диалога с клиентом.
      *
      * @param int $client_id
      * @param array $period
@@ -255,7 +332,7 @@ class Webim implements OnlineConsultant
         $date_start = $filter['period'][0] ?? Carbon::now()->startOfDay();
         $date_end = $filter['period'][1] ?? Carbon::now();
 
-        $dialog = $this->sendRequest("chat?id={$client_id}", []);
+        $dialog = $this->sendRequest("chat", ['id' => $client_id]);
 
         $messages = [];
         $all_messages = $dialog['chat']['messages'];
@@ -265,7 +342,7 @@ class Webim implements OnlineConsultant
                 break;
             }
 
-            if($date_start <= Carbon::parse($message['created_at']) && in_array($message['kind'], ['VISITOR', 'OPERATOR'])) {
+            if($date_start <= Carbon::parse($message['created_at']) && in_array($message['kind'], ['visitor', 'operator', 'keyboard', 'keyboard_response'])) {
                 $messages[] = $message;
             }
         }
@@ -290,9 +367,7 @@ class Webim implements OnlineConsultant
         $more_chats_available = true;
 
         while($more_chats_available) {
-            $method = "chats?since=".(isset($result['last_ts']) ? $result['last_ts'] : 0);
-
-            $result = $this->sendRequest($method, []);
+            $result = $this->sendRequest('chats', ['since' => isset($result['last_ts']) ? $result['last_ts'] : 0]);
 
             $find_chats = false;
 
@@ -331,9 +406,9 @@ class Webim implements OnlineConsultant
     public function findMessageFromOperator($select_message, array $messages)
     {
         foreach ($messages as $key => $message) {
-            if ($message['kind'] == 'OPERATOR') {
+            if ($message['kind'] == 'operator') {
 
-                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['message']))) {
+                if (preg_match('/' . $this->deleteControlCharactersAndSpaces($select_message) . '/iu', $this->deleteControlCharactersAndSpaces($message['message']))) {
                     $script_message_id = $key;
                     break;
                 }
@@ -356,14 +431,13 @@ class Webim implements OnlineConsultant
 
         for ($i = ($offset + 1); $i < count($messages); $i++) {
 
-            if ($messages[$i]['kind'] == 'VISITOR') {
-
+            if ($messages[$i]['kind'] == 'visitor') {
                 $client_messages .= $messages[$i]['message'];
+            } elseif ($messages[$i]['kind'] == 'keyboard_response') {
+                $client_messages .= $messages[$i]['data']['button']['text'];
             } else {
-
                 return false;
                 break;
-
             }
         }
 
@@ -382,7 +456,7 @@ class Webim implements OnlineConsultant
         $is_client_sent_message = false;
 
         foreach ($messages as $key => $message) {
-            if ($message['kind'] == 'OPERATOR') {
+            if ($message['kind'] == 'operator') {
 
                 if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($message_text)) {
                     $script_message_id = $key;
@@ -394,7 +468,7 @@ class Webim implements OnlineConsultant
         if (!empty($script_message_id)) {
             for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
 
-                if ($messages[$i]['kind'] == 'VISITOR') {
+                if ($messages[$i]['kind'] == 'visitor') {
                     $is_client_sent_message = true;
                 }
 
@@ -415,12 +489,33 @@ class Webim implements OnlineConsultant
         $operator_messages = '';
 
         foreach ($messages as $message) {
-            if ($message['kind'] == 'OPERATOR') {
+            if ($message['kind'] == 'operator') {
                 $operator_messages .= $message['message'];
             }
         }
 
         return $operator_messages;
+    }
+
+    /**
+     * Поиск сообщений от клиента.
+     *
+     * @param array $dialog
+     * @return array
+     */
+    public function findClientMessages(array $messages)
+    {
+        $client_message = '';
+
+        foreach ($messages as $message) {
+            if ($message['kind'] == 'visitor') {
+                $client_message .= $message['message'];
+            } elseif ($message['kind'] == 'keyboard_response') {
+                $client_messages .= $message['data']['button']['text'];
+            }
+        }
+
+        return $client_message;
     }
 
     public function getOperatorMessages($client_id, array $period)
@@ -430,7 +525,9 @@ class Webim implements OnlineConsultant
 
     public function checkEnabledUserIds(array $only_user_ids, array $data)
     {
-        if (! empty($only_user_ids) && (empty($data['chat_id']) || ! in_array($data['chat_id'], $only_user_ids))) {
+        $chat_id = $this->getParamFromDataWebhook('client_id', $data);
+
+        if (!empty($only_user_ids) && (empty($chat_id) || ! in_array($chat_id, $only_user_ids))) {
             return false;
         }
 
@@ -448,16 +545,53 @@ class Webim implements OnlineConsultant
         $i = count($dialog['messages'])-1;
         $message = $dialog['messages'][$i];
 
-        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['VISITOR', 'FILE_VISITOR', 'KEYBOARD_RESPONSE'])) {
+        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
             $message = $dialog['messages'][$i];
             $i--;
         }
 
-        if(!in_array($message['kind'], ['VISITOR', 'FILE_VISITOR', 'KEYBOARD_RESPONSE'])) {
+        if(!in_array($message['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
             return false;
         }
 
         return Carbon::parse($message['created_at']);
+    }
+
+    /**
+     * Получение списка ид операторов онлайн.
+     *
+     * @return array
+     */
+    public function getListOnlineOperatorsIds()
+    {
+        $operators = $this->sendRequest('operators', []);
+        $online_operators_ids = [];
+
+        foreach($operators as $operator) {
+            if($operator['roles'] == 'operator' && $operator['status'] == 'online') {
+                $online_operators_ids[] = $operator['id'];
+            }
+        }
+
+        return $online_operators_ids;
+    }
+
+    /**
+     * Перевод чата на оператора.
+     *
+     * @param int $client_id
+     * @param int $operator_id
+     * @return bool
+     */
+    public function redirectClientToChat($client_id, $operator_id)
+    {
+        $data = [
+            'chat_id' => $client_id,
+            'operator_id' => $operator_id,
+        ];
+
+        return (bool) $this->sendRequest('redirect_chat', $data);
+
     }
 
     /**

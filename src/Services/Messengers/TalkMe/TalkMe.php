@@ -200,6 +200,43 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
+     * Отправка сообщения с кнопками клиенту.
+     *
+     * @param string $client_id
+     * @param array $button_names
+     * @param string $operator
+     * @return bool
+     */
+    public function sendButtonsMessage($client_id, $button_names, $operator = null)
+    {
+        /**
+         * Формирование сообщения с вариантами ответа из за отсуствия кнопок.
+         */
+        $message = 'Пожалуйста выберите и напишите один из вариантов ответа:\n';
+
+        foreach($button_names as $key=>$button_name) {
+            $message .=  "{$key}.{$button_name}\n";
+        }
+
+        /**
+         * Формирование данных для запроса.
+         */
+        $data = [
+            'client' => [
+                'id' => $client_id,
+            ],
+            'operator' => [
+                'login' => $operator ?? $this->config['default_operator'],
+            ],
+            'message' => [
+                'text' => $message,
+            ],
+        ];
+
+        return (bool)$this->sendRequest('messageToClient', $data);
+    }
+
+    /**
      * Проверка секретки.
      *
      * @param string $request_secret
@@ -310,6 +347,13 @@ class TalkMe implements OnlineConsultant
         return true;
     }
 
+    /**
+     * Получение диалога с клиентом.
+     *
+     * @param int $client_id
+     * @param array $period
+     * @return array|mixed
+     */
     public function getDialogFromClient($client_id, array $period = [])
     {
         $result = $this->getDialogsByPeriod([
@@ -318,6 +362,8 @@ class TalkMe implements OnlineConsultant
                 'searchId' => $client_id
             ],
         ]);
+
+        return array_shift($result);
     }
 
     /**
@@ -358,6 +404,9 @@ class TalkMe implements OnlineConsultant
                 break;
             case 'messages':
                 return $dialog['messages'];
+                break;
+            case 'clientId':
+                return $dialog['clientId'];
                 break;
             default:
                 throw new Exception('Неизвестная переменная для получения из данных диалога.');
@@ -504,6 +553,25 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
+     * Поиск сообщений от клиента.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findClientMessages(array $messages)
+    {
+        $client_message = '';
+
+        foreach ($messages as $message) {
+            if ($message['whoSend'] == 'client') {
+                $client_message .= $message['message'];
+            }
+        }
+
+        return $client_message;
+    }
+
+    /**
      * Удаление управляющих символов и пробелов из строки.
      *
      * @param string $string
@@ -535,5 +603,15 @@ class TalkMe implements OnlineConsultant
         }
 
         return Carbon::parse($message['dateTime']);
+    }
+
+    /**
+     * Получение списка ид операторов онлайн.
+     *
+     * @return array
+     */
+    public function getListOnlineOperatorsIds()
+    {
+        return [];
     }
 }

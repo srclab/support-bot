@@ -38,7 +38,7 @@ class SupportBotController extends BaseController
 
             $result = app(\SrcLab\SupportBot\SupportBot::class)->processWebhook(! empty($secret) ? array_merge($post_data, ['secretKey' => $secret]) : $post_data);
 
-            if($config['online_consultant'] == 'webim' && $result) {
+            if($config['online_consultant'] == 'webim' && !empty($result)) {
                 return response()->json(['result' => 'ok']);
             }
         }

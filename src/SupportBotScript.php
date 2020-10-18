@@ -7,6 +7,7 @@ use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 
+/** TODO: предусмотреть вариант что dialogId записанный в базе данных будет неактивным ( несуществует ) */
 class SupportBotScript
 {
     /**
@@ -87,16 +88,16 @@ class SupportBotScript
 
         /**
          * Получение сообщений с пользователем.
+         *
+         * TODO: убрать метод сделать напрямую.
          */
-        $dialog = $this->getClientDialog($script->search_id, Carbon::now()->subDays(2), Carbon::now()->endOfDay());
+        $dialog = $this->getClientDialog($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
         if(!$dialog) {
             return false;
         }
 
-        $dialog = array_shift($dialog);
-
-        $messages = $dialog['messages'];
+        $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
 
         if($script->step == $this->config['scripts']['clarification']['final_step']) {
 
@@ -124,7 +125,8 @@ class SupportBotScript
                     /**
                      * Установка несуществующего шага для завершения скрипта.
                      */
-                    $script->delete();
+                    $script->step = -1;
+                    $script->save();
 
                 } else {
 
@@ -132,9 +134,9 @@ class SupportBotScript
                      * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
                      */
                     foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
-                        if (preg_match('/' . $variant['select_message'] . '/iu', $client_messages)) {
+                        if (preg_match('/' . $variant['button'] . '/iu', $client_messages)) {
 
-                            $result = $variant['message'];
+                            $result = $variant['messages'];
 
                             if (empty($variant['next_step'])) {
                                 /**
@@ -142,12 +144,19 @@ class SupportBotScript
                                  */
                                 $script->prev_step = $script->step;
                                 $script->step = $this->config['scripts']['clarification']['final_step'];
-                            } else {
+                            } elseif(!empty($variant['for_operator'])) {
+                                /**
+                                 * TODO: предусмотреть что операторов в сети не будет, тогда выводить сообщение что все операторы не в сети и ответят в 9 часов ( отложенно перекидывать утром ).
+                                 */
+                                $operators = $this->online_consultant->getListOnlineOperatorsIds();
+                                $this->online_consultant->redirectClientToChat($script->search_id, $operators[array_rand($operators)]);
+                            } else{
                                 /**
                                  * Установка следующего шага и сохранения предидущего.
                                  */
                                 $script->prev_step = $script->step;
-                                $script->step++;
+                                $script->step = $variant['next_step'];
+                                $buttons = array_column($this->config['scripts']['clarification']['steps'][$script->step]['variants'], 'button');
                             }
 
                             $script->save();
@@ -169,12 +178,21 @@ class SupportBotScript
             }
         }
 
+        dd($result);
+
         if(!empty($result)) {
+            $client_id = $this->online_consultant->getParamFromDialog('clientId', $result);
 
             /**
-             * Отправка сообщения пользователю.
+             * Отправка сообщений пользователю.
              */
-            $this->online_consultant->sendMessage($dialog['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result));
+            foreach($result as $message) {
+                $this->online_consultant->sendMessage($client_id, $this->replaceMultipleSpacesWithLineBreaks($message));
+            }
+
+            if(!empty($buttons)) {
+                $this->online_consultant->sendButtonsMessage($client_id, $buttons);
+            }
 
             return true;
 
@@ -205,7 +223,7 @@ class SupportBotScript
             /**
              * Проверка времени последнего сообщения клиента.
              */
-            $dialog = $this->online_consultant->getDialogFromClient($script->search_id);
+            $dialog = $this->online_consultant->getDialogFromClient($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
             $datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);
 
@@ -216,7 +234,7 @@ class SupportBotScript
                 continue;
             }
 
-            $result = $this->getResultForClarificationScript($script);
+            $result = $this->getResultForScript($script, $dialog);
 
             if (!empty($result)) {
 
@@ -224,69 +242,73 @@ class SupportBotScript
                 $script->save();
 
                 $this->online_consultant->sendMessage($result['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result['result']));
+                $this->online_consultant->sendButtonsMessage($result['clientId'], $result['buttons']);
 
+            } else {
+                $script->delete();
             }
         }
     }
 
     /**
-     * Получение сообщения и ID клиента для сценария уточнения.
+     * Получение сообщения и ID клиента для сценария.
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @param array $dialog
      * @return false|array
      */
-    private function getResultForClarificationScript($script)
+    private function getResultForScript($script, array $dialog)
     {
-        $dialog = $this->getClientDialog($script->search_id, Carbon::now()->subDays(14), Carbon::now()->endOfDay());
-
-        if(!$dialog) {
-            return false;
-        }
-
-        $dialog = array_shift($dialog);
-
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
-
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
+        
+        $operator_messages = $this->online_consultant->findOperatorMessages($messages);
+        $client_messages = $this->online_consultant->findClientMessages($messages);
 
-        if(empty($messages)) {
-            $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
-        } else {
+        /**
+         * Получение исключений.
+         */
+        $exceptions = $this->scripts_exception_repository->getAllException();
 
-            $is_client_sent_message = $this->online_consultant->isClientSentMessageAfterOperatorMessage($this->config['scripts']['notification']['message'], $messages);
+        if (preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
 
-            if (empty($is_client_sent_message)) {
+            foreach ($exceptions as $exception) {
+
+                if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
+                    $stop_word = true;
+                    break;
+                }
+            }
+
+            if (empty($stop_word)) {
                 $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
+                $buttons = array_column($this->config['scripts']['clarification']['steps'][0]['variants'], 'button');
             }
         }
 
         if(empty($result)) {
-
-            $script->delete();
-
             return false;
         }
 
-        return ['clientId' => $dialog['clientId'], 'result' => $result];
+        return [
+            'clientId' => $this->online_consultant->getParamFromDialog('clientId', $dialog),
+            'result' => $result,
+            'buttons' => $buttons
+        ];
     }
 
     /**
      * Получение диалога с клиентом.
      *
      * @param int $search_id
-     * @param \Carbon\Carbon $start_date
-     * @param \Carbon\Carbon $end_date
+     * @param array $filter
      * @return false|array
      */
-    private function getClientDialog($search_id, $start_date, $end_date)
+    private function getClientDialog($search_id, array $filter)
     {
         /**
          * Получение сообщений.
          */
-        $filter = [
-            'period' => [$start_date, $end_date],
-        ];
-
         $dialog =  $this->online_consultant->getDialogFromClient($search_id, $filter);
 
         return empty($dialog) ? false : $dialog;
@@ -311,7 +333,17 @@ class SupportBotScript
 
             foreach ($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants'] as $key => $variant) {
 
-                $select_message .= $this->deleteControlCharactersAndSpaces(quotemeta($variant['message']));
+                if(empty($variant['messages'])) {
+                    continue;
+                }
+
+                $messages = [];
+
+                foreach($variant['messages'] as $message) {
+                    $messages[] = $this->deleteControlCharactersAndSpaces(quotemeta($message));
+                }
+
+                $select_message .= implode('|', $messages);
 
                 if ($key != (count($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants']) - 1)) {
                     $select_message .= '|';
@@ -321,7 +353,9 @@ class SupportBotScript
             $select_message .= ')';
         }
 
-        $script_message_id = $this->findMessageFromOperator($select_message, $messages);
+        $script_message_id = $this->online_consultant->findMessageFromOperator($select_message, $messages);
+
+        dd($script_message_id);
 
         $client_messages = '';
 
@@ -355,7 +389,7 @@ class SupportBotScript
          */
         $script->delete();
 
-        return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['message'];
+        return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['messages'];
     }
 
     /**
@@ -365,7 +399,7 @@ class SupportBotScript
      * @param string $client_name
      * @return string
      */
-    private function insertClientNameInString($string, $client_name)
+    public function insertClientNameInString($string, $client_name)
     {
         return str_replace(':client_name', $client_name, $string);
     }
