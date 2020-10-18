@@ -134,23 +134,27 @@ class SupportBotScript
                      * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
                      */
                     foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
+
                         if (preg_match('/' . $variant['button'] . '/iu', $client_messages)) {
 
-                            $result = $variant['messages'];
-
                             if (empty($variant['next_step'])) {
+                                $result = $variant['messages'];
+
                                 /**
                                  * Установка следущего шага финальным.
                                  */
                                 $script->prev_step = $script->step;
                                 $script->step = $this->config['scripts']['clarification']['final_step'];
                             } elseif(!empty($variant['for_operator'])) {
+
                                 /**
                                  * TODO: предусмотреть что операторов в сети не будет, тогда выводить сообщение что все операторы не в сети и ответят в 9 часов ( отложенно перекидывать утром ).
                                  */
                                 $operators = $this->online_consultant->getListOnlineOperatorsIds();
                                 $this->online_consultant->redirectClientToChat($script->search_id, $operators[array_rand($operators)]);
                             } else{
+                                $result = $variant['messages'];
+
                                 /**
                                  * Установка следующего шага и сохранения предидущего.
                                  */
@@ -178,10 +182,9 @@ class SupportBotScript
             }
         }
 
-        dd($result);
-
         if(!empty($result)) {
-            $client_id = $this->online_consultant->getParamFromDialog('clientId', $result);
+
+            $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
 
             /**
              * Отправка сообщений пользователю.
@@ -222,23 +225,26 @@ class SupportBotScript
 
             /**
              * Проверка времени последнего сообщения клиента.
+             *
+             * TODO: раскоментировать после проверки.
              */
             $dialog = $this->online_consultant->getDialogFromClient($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
-            $datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);
+            /*$datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);*/
 
             /** @var \Carbon\Carbon $datetime_message_client */
-            if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
+            /*if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
                 $script->send_message_at = $datetime_message_client->addHour(3);
                 $script->save();
                 continue;
-            }
+            }*/
 
             $result = $this->getResultForScript($script, $dialog);
 
             if (!empty($result)) {
 
                 $script->step++;
+                $script->prev_step = 0;
                 $script->save();
 
                 $this->online_consultant->sendMessage($result['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result['result']));
@@ -282,7 +288,7 @@ class SupportBotScript
 
             if (empty($stop_word)) {
                 $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
-                $buttons = array_column($this->config['scripts']['clarification']['steps'][0]['variants'], 'button');
+                $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
             }
         }
 
@@ -323,9 +329,9 @@ class SupportBotScript
      */
     private function getClientMessageAfterLastScriptMessage($script, $messages)
     {
-        if ($script->step == 2) {
+        if ($script->step == 1) {
 
-            $select_message = '(?:' . $this->deleteControlCharactersAndSpaces($this->config['scripts']['clarification']['select_message']) . ')';
+            $select_message = '(?:' . $this->deleteControlCharactersAndSpaces(str_replace(':client_name', '', $this->config['scripts']['clarification']['message'])) . ')';
 
         } else {
 
@@ -337,13 +343,13 @@ class SupportBotScript
                     continue;
                 }
 
-                $messages = [];
+                $variant_messages = [];
 
                 foreach($variant['messages'] as $message) {
-                    $messages[] = $this->deleteControlCharactersAndSpaces(quotemeta($message));
+                    $variant_messages[] = $this->deleteControlCharactersAndSpaces(quotemeta($message));
                 }
 
-                $select_message .= implode('|', $messages);
+                $select_message .= implode('|', $variant_messages);
 
                 if ($key != (count($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants']) - 1)) {
                     $select_message .= '|';
@@ -354,8 +360,6 @@ class SupportBotScript
         }
 
         $script_message_id = $this->online_consultant->findMessageFromOperator($select_message, $messages);
-
-        dd($script_message_id);
 
         $client_messages = '';
 

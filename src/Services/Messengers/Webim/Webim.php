@@ -136,8 +136,6 @@ class Webim implements OnlineConsultant
             ],
         ];
 
-        //dd($data);
-
         return (bool) $this->sendRequest('send_message', $data);
     }
 
@@ -189,7 +187,7 @@ class Webim implements OnlineConsultant
                 }
 
                 if($message['kind'] == 'keyboard_response') {
-                    $message_text = $message['data']['text'];
+                    $message_text = $message['data']['button']['text'];
                 } else {
                     $message_text = $message['text'];
                 }
@@ -329,8 +327,8 @@ class Webim implements OnlineConsultant
          * @var \Carbon\Carbon $date_start
          * @var \Carbon\Carbon $date_end
          */
-        $date_start = $filter['period'][0] ?? Carbon::now()->startOfDay();
-        $date_end = $filter['period'][1] ?? Carbon::now();
+        $date_start = $period[0] ?? Carbon::now()->startOfDay();
+        $date_end = $period[1] ?? Carbon::now();
 
         $dialog = $this->sendRequest("chat", ['id' => $client_id]);
 
@@ -342,7 +340,7 @@ class Webim implements OnlineConsultant
                 break;
             }
 
-            if($date_start <= Carbon::parse($message['created_at']) && in_array($message['kind'], ['visitor', 'operator', 'keyboard', 'keyboard_response'])) {
+            if(in_array($message['kind'], ['visitor', 'operator', 'keyboard', 'keyboard_response']) && Carbon::parse($message['created_at']) >= $date_start) {
                 $messages[] = $message;
             }
         }
@@ -360,8 +358,8 @@ class Webim implements OnlineConsultant
          * @var \Carbon\Carbon $date_start
          * @var \Carbon\Carbon $date_end
          */
-        $date_start = $filter['period'][0] ?? Carbon::now()->startOfDay();
-        $date_end = $filter['period'][1] ?? Carbon::now();
+        $date_start = $period[0] ?? Carbon::now()->startOfDay();
+        $date_end = $period[1] ?? Carbon::now();
 
         $chats = [];
         $more_chats_available = true;
@@ -408,9 +406,9 @@ class Webim implements OnlineConsultant
         foreach ($messages as $key => $message) {
             if ($message['kind'] == 'operator') {
 
-                if (preg_match('/' . $this->deleteControlCharactersAndSpaces($select_message) . '/iu', $this->deleteControlCharactersAndSpaces($message['message']))) {
+                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['message']))) {
                     $script_message_id = $key;
-                    break;
+                    //break;
                 }
             }
         }
@@ -505,17 +503,17 @@ class Webim implements OnlineConsultant
      */
     public function findClientMessages(array $messages)
     {
-        $client_message = '';
+        $client_messages = '';
 
         foreach ($messages as $message) {
             if ($message['kind'] == 'visitor') {
-                $client_message .= $message['message'];
+                $client_messages .= $message['message'];
             } elseif ($message['kind'] == 'keyboard_response') {
                 $client_messages .= $message['data']['button']['text'];
             }
         }
 
-        return $client_message;
+        return $client_messages;
     }
 
     public function getOperatorMessages($client_id, array $period)
