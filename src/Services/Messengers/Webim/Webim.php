@@ -293,8 +293,6 @@ class Webim implements OnlineConsultant
 
         $response = curl_exec($ch);
 
-        //dd($response);
-
         $http_code = intval(curl_getinfo($ch, CURLINFO_HTTP_CODE));
 
         curl_close($ch);
@@ -563,10 +561,11 @@ class Webim implements OnlineConsultant
     public function getListOnlineOperatorsIds()
     {
         $operators = $this->sendRequest('operators', []);
+
         $online_operators_ids = [];
 
         foreach($operators as $operator) {
-            if($operator['roles'] == 'operator' && $operator['status'] == 'online') {
+            if(in_array('operator', $operator['roles']) && $operator['status'] == 'online') {
                 $online_operators_ids[] = $operator['id'];
             }
         }

@@ -57,7 +57,6 @@ class SupportBot
      */
     public function processWebhook(array $data)
     {
-        Log::debug('Данные вебхука', $data);
         /**
          * Проверка полученных данных, определение возможности сформировать ответ.
          */

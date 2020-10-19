@@ -104,7 +104,7 @@ class SupportBotScript
             /**
              * Отправка пользователю финального сообщения сценария и деактивация сценария для пользователя.
              */
-            $result = $this->getFinalMessageAndDeleteScript($script);
+            $result = $this->getFinalMessageAndDeactivateScript($script);
 
         } else {
 
@@ -113,70 +113,67 @@ class SupportBotScript
              */
             $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
 
+
             if (!empty($client_messages)) {
 
                 /**
-                 * Отправка сообщения и деактивация сценария для пользователя в случае если шаг является финальным.
+                 * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
                  */
-                if (!empty($this->config['scripts']['clarification']['steps'][$script->step]['is_final'])) {
+                foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
 
-                    $result = $this->config['scripts']['clarification']['steps'][$script->step]['message'];
 
-                    /**
-                     * Установка несуществующего шага для завершения скрипта.
-                     */
-                    $script->step = -1;
-                    $script->save();
+                    if (preg_match('/' . preg_quote($variant['button']) . '/iu', $client_messages)) {
 
-                } else {
+                        if(!empty($variant['messages'])) {
+                            $result = $variant['messages'];
+                        }
 
-                    /**
-                     * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
-                     */
-                    foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
-
-                        if (preg_match('/' . $variant['button'] . '/iu', $client_messages)) {
-
-                            if (empty($variant['next_step'])) {
-                                $result = $variant['messages'];
-
-                                /**
-                                 * Установка следущего шага финальным.
-                                 */
-                                $script->prev_step = $script->step;
-                                $script->step = $this->config['scripts']['clarification']['final_step'];
-                            } elseif(!empty($variant['for_operator'])) {
-
-                                /**
-                                 * TODO: предусмотреть что операторов в сети не будет, тогда выводить сообщение что все операторы не в сети и ответят в 9 часов ( отложенно перекидывать утром ).
-                                 */
-                                $operators = $this->online_consultant->getListOnlineOperatorsIds();
-                                $this->online_consultant->redirectClientToChat($script->search_id, $operators[array_rand($operators)]);
-                            } else{
-                                $result = $variant['messages'];
-
-                                /**
-                                 * Установка следующего шага и сохранения предидущего.
-                                 */
-                                $script->prev_step = $script->step;
-                                $script->step = $variant['next_step'];
-                                $buttons = array_column($this->config['scripts']['clarification']['steps'][$script->step]['variants'], 'button');
-                            }
-
+                        if(!empty($variant['for_operator'])) {
+                            /**
+                             * Установка несуществующего шага для завершения скрипта.
+                             */
+                            $script->step = -1;
                             $script->save();
 
-                            break;
+                            /**
+                             * TODO: предусмотреть что операторов в сети не будет, тогда выводить сообщение что все операторы не в сети и ответят в 9 часов ( отложенно перекидывать утром ).
+                             */
+                            $operators = $this->online_consultant->getListOnlineOperatorsIds();
+                            $this->online_consultant->redirectClientToChat($script->search_id, $operators[array_rand($operators)]);
+                        } elseif (!empty($variant['is_final'])) {
+                            /**
+                             * Установка несуществующего шага для завершения скрипта.
+                             */
+                            $script->step = -1;
+                            $script->save();
 
+                        } elseif (!empty($variant['next_step'])) {
+                            /**
+                             * Установка следующего шага и сохранения предидущего.
+                             */
+                            $script->prev_step = $script->step;
+                            $script->step = $variant['next_step'];
+                            $buttons = array_column($this->config['scripts']['clarification']['steps'][$script->step]['variants'], 'button');
+                        } else{
+                            /**
+                             * Установка следущего шага финальным.
+                             */
+                            $script->prev_step = $script->step;
+                            $script->step = $this->config['scripts']['clarification']['final_step'];
                         }
-                    }
 
-                    /**
-                     * Отправка финального сообщения в случае если сообщения пользователя не совпало ни с одним из варианта текущего шага.
-                     */
-                    if (empty($result)) {
-                        $result = $this->getFinalMessageAndDeleteScript($script);
-                    }
+                        $script->save();
 
+                        break;
+
+                    }
+                }
+
+                /**
+                 * Отправка финального сообщения в случае если сообщения пользователя не совпало ни с одним из варианта текущего шага.
+                 */
+                if (empty($result)) {
+                    $result = $this->getFinalMessageAndDeactivateScript($script);
                 }
 
             }
@@ -346,7 +343,7 @@ class SupportBotScript
                 $variant_messages = [];
 
                 foreach($variant['messages'] as $message) {
-                    $variant_messages[] = $this->deleteControlCharactersAndSpaces(quotemeta($message));
+                    $variant_messages[] = $this->deleteControlCharactersAndSpaces(preg_quote($message));
                 }
 
                 $select_message .= implode('|', $variant_messages);
@@ -381,17 +378,18 @@ class SupportBotScript
 
 
     /**
-     * Получение финального сообщения для сценария и удаление сценария.
+     * Получение финального сообщения для сценария и деактивация сценария.
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
      * @return string
      */
-    private function getFinalMessageAndDeleteScript($script)
+    private function getFinalMessageAndDeactivateScript($script)
     {
         /**
          * Установка несуществующего шага для завершения скрипта.
          */
-        $script->delete();
+        $script->step = -1;
+        $script->save();
 
         return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['messages'];
     }
