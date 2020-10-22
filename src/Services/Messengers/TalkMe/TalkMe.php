@@ -395,9 +395,9 @@ class TalkMe implements OnlineConsultant
     {
         $operator_messages = [];
 
-        foreach ($messages as $message) {
+        foreach ($messages as $key=>$message) {
             if ($message['whoSend'] == 'operator' && (empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage'))) {
-                $operator_messages[] = $message['message'];
+                $operator_messages[$key] = $message['message'];
             }
         }
 
@@ -414,9 +414,9 @@ class TalkMe implements OnlineConsultant
     {
         $client_message = [];
 
-        foreach ($messages as $message) {
+        foreach ($messages as $key=>$message) {
             if ($message['whoSend'] == 'client') {
-                $client_message[] = $message['message'];
+                $client_message[$key] = $message['message'];
             }
         }
 

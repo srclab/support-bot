@@ -58,6 +58,11 @@ class SupportBot
     public function processWebhook(array $data)
     {
         /**
+         * TODO: удалить после проверки.
+         */
+        Log::debug('Данные вебхук: ', $data);
+
+        /**
          * Проверка полученных данных, определение возможности сформировать ответ.
          */
         if(!$this->online_consultant->checkWebhookData($data)) {
@@ -67,6 +72,7 @@ class SupportBot
         $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
 
         if(!empty($this->config['scripts']['enabled']) && !empty($search_id)) {
+
             /**
              * Планирование отложенного сценария для удержания пользователя.
              */
@@ -74,59 +80,34 @@ class SupportBot
 
                 $result_handle = $this->support_bot_scripts->handleScriptForUserIfExists($search_id);
 
-                if($result_handle == 'processing') {
+                if ($result_handle == 'processing') {
                     return true;
                 } else {
-                    if(!$result_handle) {
-                        if ($this->config['online_consultant'] == 'webim') {
+                    /**
+                     * Задержка чата на боте в случае если на бота чат перекинул оператор.
+                     */
+                    if ($this->config['online_consultant'] == 'webim') {
+                        if ($data['event'] == 'new_chat') {
+                            if (!$result_handle) {
+                                $this->support_bot_scripts->planningPendingScripts($search_id);
+                            }
 
-                            if($data['event'] == 'new_chat') {
-                                $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [
-                                    Carbon::now()->subDay(1),
-                                    Carbon::parse('2020-10-22T10:25:57Z')
-                                ]);
-
-                                $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
-
-                                if ($this->online_consultant->isDialogRedirectedToBot($dialog)) {
-                                    $result = $this->support_bot_scripts->planingScriptForUser($search_id, $dialog);
-                                    
-                                    if ($result) {
-                                        return true;
-                                    } else {
-                                        $this->online_consultant->closeChat($search_id);
-
-                                        return false;
-                                    }
-                                }
+                            if ($this->online_consultant->isClientRedirectedToBot($search_id)) {
+                                return true;
                             }
                         }
-                    } elseif($this->config['online_consultant'] == 'webim'
-                        && $data['event'] == 'new_chat'
-                            && $this->online_consultant->isDialogRedirectedToBot($data['messages'])
-                    ) {
-                        return true;
-                    } else {
-                        $this->support_bot_scripts->planingScriptForUser($search_id);
+                    } elseif (!$result_handle) {
+                        $this->support_bot_scripts->planningPendingScripts($search_id);
                     }
                 }
             }
         }
-
-        dd('2');
 
         /**
          * Проверка фильтра пользователей по id на сайте.
          */
         if(!$this->online_consultant->checkEnabledUserIds($this->config['enabled_for_user_ids'], $data)) {
             return false;
-        }
-
-        /**
-         * Задержка чата на боте в случае если на бота чат перекинул оператор.
-         */
-        if($this->config['online_consultant'] == 'webim' && $data['event'] == 'new_chat') {
-            return true;
         }
 
         /**

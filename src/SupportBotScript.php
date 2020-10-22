@@ -83,29 +83,13 @@ class SupportBotScript
     }
 
     /**
-     * Планировка сценария для пользователя.
+     * Планирование отложенных сценариев.
      *
      * @param int $search_id
-     * @param array $dialog
-     * @return bool
      */
-    public function planingScriptForUser($search_id, array $dialog)
+    public function planningPendingScripts($search_id)
     {
-        if($this->config['online_consultant'] == 'webim') {
-            $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
-
-            if($this->checkDialogScriptLaunchConditions($messages)) {
-                $this->planningPendingScripts($search_id);
-                
-                return true;
-            }
-        } else {
-            $this->planningPendingScripts($search_id);
-            
-            return true;
-        }
-
-        return false;
+        $this->scripts_repository->addRecord($search_id, now()->addMinutes(1));
     }
 
     /**
@@ -124,7 +108,7 @@ class SupportBotScript
          * Получение сообщений с пользователем.
          *
          */
-        $dialog =  $this->online_consultant->getDialogFromClient($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
+        $dialog =  $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
         if(empty($dialog)) {
             return false;
@@ -139,13 +123,19 @@ class SupportBotScript
              */
             $result = $this->getFinalMessageAndDeactivateScript($script);
 
+            /**
+             * Закрытие диалога.
+             */
+            if($this->config['online_consultant'] == 'webim') {
+                $this->online_consultant->closeChat($script->search_id);
+            }
+
         } else {
 
             /**
              * Получение сообщений клиента полученных после последнего сообщения сценария.
              */
             $client_messages = implode('', $this->getClientMessageAfterLastScriptMessage($script, $messages));
-
 
             if (!empty($client_messages)) {
 
@@ -180,6 +170,13 @@ class SupportBotScript
                             $script->step = -1;
                             $script->save();
 
+                            /**
+                             * Закрытие диалога.
+                             */
+                            if($this->config['online_consultant'] == 'webim') {
+                                $this->online_consultant->closeChat($script->search_id);
+                            }
+
                         } elseif (!empty($variant['next_step'])) {
                             /**
                              * Установка следующего шага и сохранения предидущего.
@@ -207,8 +204,14 @@ class SupportBotScript
                  */
                 if (empty($result)) {
                     $result = $this->getFinalMessageAndDeactivateScript($script);
-                }
 
+                    /**
+                     * Закрытие диалога.
+                     */
+                    if($this->config['online_consultant'] == 'webim') {
+                        $this->online_consultant->closeChat($script->search_id);
+                    }
+                }
             }
         }
 
@@ -419,7 +422,7 @@ class SupportBotScript
 
         if (!empty($script_message_id)) {
 
-            $messages = array_slice($messages, ($script_message_id + ($this->config['online_consultant'] == 'webim') ? 2 : 1));
+            $messages = array_slice($messages, ($script_message_id + ($this->config['online_consultant'] == 'webim' ? 2 : 1)));
 
             /**
              * Удаление скрипта в случае если диалог подхватил реальный оператор.
@@ -486,16 +489,6 @@ class SupportBotScript
     private function deleteControlCharactersAndSpaces($string)
     {
         return preg_replace('/[\x00-\x1F\x7F\s]/', '', $string);
-    }
-
-    /**
-     * Планирование отложенных сценариев.
-     *
-     * @param int $search_id
-     */
-    private function planningPendingScripts($search_id)
-    {
-        $this->scripts_repository->addRecord($search_id, now()->addMinutes(1));
     }
 
     /**

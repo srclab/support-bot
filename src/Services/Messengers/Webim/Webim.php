@@ -330,17 +330,7 @@ class Webim implements OnlineConsultant
          * TODO: вернуть break; после проверки.
          */
         foreach ($messages as $key => $message) {
-            if(!in_array($message['kind'], ['visitor', 'operator', 'keyboard_response'])) {
-                continue;
-            }
-
-            if($message['kind'] == 'keyboard_response') {
-                $text = $this->deleteControlCharactersAndSpaces($message['data']['button']['text']);
-            } else {
-                $text = $this->deleteControlCharactersAndSpaces($message['message']);
-            }
-
-            if (preg_match('/' . $select_message . '/iu', $text)) {
+            if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message))) {
                 $message_id = $key;
                 //break;
             }
@@ -359,9 +349,9 @@ class Webim implements OnlineConsultant
     {
         $operator_messages = [];
 
-        foreach ($messages as $message) {
+        foreach ($messages as $key=>$message) {
             if ($message['kind'] == 'operator') {
-                $operator_messages[] = $message['message'] ?? $message['text'];
+                $operator_messages[$key] = $message['message'] ?? $message['text'];
             }
         }
 
@@ -378,11 +368,11 @@ class Webim implements OnlineConsultant
     {
         $client_messages = [];
 
-        foreach ($messages as $message) {
+        foreach ($messages as $key=>$message) {
             if ($message['kind'] == 'visitor') {
-                $client_messages[] = $message['message'] ?? $message['text'];
+                $client_messages[$key] = $message['message'] ?? $message['text'];
             } elseif ($message['kind'] == 'keyboard_response') {
-                $client_messages[] = $message['data']['button']['text'];
+                $client_messages[$key] = $message['data']['button']['text'];
             }
         }
 
@@ -484,31 +474,39 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     * Проверка был ли передан диалог боту.
+     * Проверка был ли клиент передан боту.
      *
-     * @param array $dialog
+     * @param int $client_id
      * @return bool
      */
-    public function isDialogRedirectedToBot(array $dialog)
+    public function isClientRedirectedToBot($client_id)
     {
+        $dialog = $this->getDialogFromClientByPeriod($client_id, [Carbon::now()->subDays(1), Carbon::now()->endOfDay()]);
         $messages = $dialog['messages'];
-        $redirected_message = "Диалог был передан оператору {$this->config['bot_name']}";
+
+        if(empty($messages)) {
+            return false;
+        }
 
         $result = false;
 
         for($i = count($messages)-1; $i > 0; $i--) {
             if ($messages[$i]['kind'] == 'info') {
-                $text = $messages[$i]['text'] ?? $messages[$i]['message'];
 
-                if ($text == $redirected_message) {
-                    $result = true;
+                if(preg_match('/Диалог был передан оператору (.*)/m', $messages[$i]['message'], $operator)) {
+                    if($operator[1] == $this->config['bot_name']) {
+                        return true;
+                        break;
+                    } else {
+                        break;
+                    }
                 }
             } else {
                 break;
             }
         }
 
-        return $result;
+        return false;
     }
 
     //****************************************************************
