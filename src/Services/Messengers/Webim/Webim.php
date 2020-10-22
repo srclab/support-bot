@@ -70,17 +70,6 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     * Проверка наличия оператора.
-     *
-     * @param array $data
-     * @return bool
-     */
-    public function checkOperator(array $data)
-    {
-        return true;
-    }
-
-    /**
      * Отправка сообщения клиенту.
      *
      * @param string $client_id
@@ -140,17 +129,6 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     * Проверка секретки.
-     *
-     * @param string $request_secret
-     * @return bool
-     */
-    public function checkSecret($request_secret)
-    {
-        return empty($this->config['webhook_secret']) || $this->config['webhook_secret'] == $request_secret;
-    }
-
-    /**
      * Получение параметра из данных вебхука.
      *
      * @param string $param
@@ -193,6 +171,12 @@ class Webim implements OnlineConsultant
                 }
 
                 return empty($message_text) ? null : $message_text;
+            case 'messages':
+                if($data['event'] == 'new_chat') {
+                    return $data['messages'] ?? null;
+                } else {
+                    return null;
+                }
             case 'operator_login':
                 return null;
             default:
@@ -222,6 +206,309 @@ class Webim implements OnlineConsultant
             default:
                 throw new Exception('Неизвестная переменная для получения из данных диалога.');
         }
+    }
+
+    /**
+     * Получение диалога с клиентом.
+     *
+     * @param int $client_id
+     * @param array $period
+     * @return array
+     */
+    public function getDialogFromClientByPeriod($client_id, array $period = [])
+    {
+        /**
+         * Фомирование временных рамок в нужном формате.
+         *
+         * @var \Carbon\Carbon $date_start
+         * @var \Carbon\Carbon $date_end
+         */
+        $date_start = $period[0] ?? Carbon::now()->startOfDay();
+        $date_end = $period[1] ?? Carbon::now();
+
+        $dialog = $this->sendRequest("chat", ['id' => $client_id]);
+
+        $messages = [];
+        $all_messages = $dialog['chat']['messages'];
+
+        foreach($all_messages as $key=>$message) {
+            if(Carbon::parse($message['created_at']) > $date_end) {
+                break;
+            }
+
+            if(in_array($message['kind'], ['visitor', 'operator', 'keyboard', 'keyboard_response', 'info']) && Carbon::parse($message['created_at']) >= $date_start) {
+                $messages[] = $message;
+            }
+        }
+
+        $dialog['chat']['messages'] = $messages;
+
+        return $dialog['chat'];
+    }
+
+    /**
+     * Получение диалогов со списком сообщений за период.
+     *
+     * @param array $period
+     * @return array
+     */
+    public function getDialogsByPeriod(array $period)
+    {
+        /**
+         * Фомирование временных рамок в нужном формате.
+         *
+         * @var \Carbon\Carbon $date_start
+         * @var \Carbon\Carbon $date_end
+         */
+        $date_start = $period[0] ?? Carbon::now()->startOfDay();
+        $date_end = $period[1] ?? Carbon::now();
+
+        $chats = [];
+        $more_chats_available = true;
+
+        while($more_chats_available) {
+            $result = $this->sendRequest('chats', ['since' => isset($result['last_ts']) ? $result['last_ts'] : 0]);
+
+            $find_chats = false;
+
+            foreach($result['chats'] as $chat) {
+
+                $created_at = Carbon::parse($chat['created_at']);
+                if($created_at >= $date_start && $created_at <= $date_end) {
+                    $chats[] = $chat;
+                    $find_chats = true;
+                }
+            }
+
+            if(!empty($chats) && (!$find_chats && $more_chats_available)) {
+                $more_chats_available = false;
+            }
+        }
+
+        /**
+         * Фильтрация сообщений по дате в диалоге.
+         */
+        foreach($chats as $key=>$chat) {
+            $messages = [];
+
+            foreach($chat['messages'] as $message) {
+                if (Carbon::parse($message['created_at']) > $date_end) {
+                    break;
+                }
+
+                if (in_array($message['kind'], [
+                        'visitor',
+                        'operator',
+                        'keyboard',
+                        'keyboard_response',
+                        'info'
+                    ]) && Carbon::parse($message['created_at']) >= $date_start) {
+                    $messages[] = $message;
+                }
+            }
+
+            if(empty($messages)) {
+                unset($chat[$key]);
+            } else {
+                $chat[$key]['messages'] = $messages;
+            }
+        }
+
+        return $chats;
+    }
+
+    /**
+     * Поиск ключа сообщения в массиве сообщений.
+     *
+     * @param string $select_message
+     * @param array $messages
+     * @return int|null
+     */
+    public function findMessageKey($select_message, array $messages)
+    {
+        /**
+         * TODO: вернуть break; после проверки.
+         */
+        foreach ($messages as $key => $message) {
+            if(!in_array($message['kind'], ['visitor', 'operator', 'keyboard_response'])) {
+                continue;
+            }
+
+            if($message['kind'] == 'keyboard_response') {
+                $text = $this->deleteControlCharactersAndSpaces($message['data']['button']['text']);
+            } else {
+                $text = $this->deleteControlCharactersAndSpaces($message['message']);
+            }
+
+            if (preg_match('/' . $select_message . '/iu', $text)) {
+                $message_id = $key;
+                //break;
+            }
+        }
+
+        return $message_id ?? null;
+    }
+
+    /**
+     * Поиск сообщений оператора.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findOperatorMessages(array $messages)
+    {
+        $operator_messages = [];
+
+        foreach ($messages as $message) {
+            if ($message['kind'] == 'operator') {
+                $operator_messages[] = $message['message'] ?? $message['text'];
+            }
+        }
+
+        return $operator_messages;
+    }
+
+    /**
+     * Поиск сообщений от клиента.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findClientMessages(array $messages)
+    {
+        $client_messages = [];
+
+        foreach ($messages as $message) {
+            if ($message['kind'] == 'visitor') {
+                $client_messages[] = $message['message'] ?? $message['text'];
+            } elseif ($message['kind'] == 'keyboard_response') {
+                $client_messages[] = $message['data']['button']['text'];
+            }
+        }
+
+        return $client_messages;
+    }
+
+    /**
+     * Проверка фильтра пользователей по id на сайте.
+     *
+     * @param array $only_user_ids
+     * @param array $data
+     * @return bool
+     */
+    public function checkEnabledUserIds(array $only_user_ids, array $data)
+    {
+        $chat_id = $this->getParamFromDataWebhook('client_id', $data);
+
+        if (!empty($only_user_ids) && (empty($chat_id) || ! in_array($chat_id, $only_user_ids))) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Получение даты и времени последнего сообщения клиента.
+     *
+     * @param array $dialog
+     * @return \Carbon\Carbon|false
+     */
+    public function getDateTimeClientLastMessage($dialog)
+    {
+        $i = count($dialog['messages'])-1;
+        $message = $dialog['messages'][$i];
+
+        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
+            $message = $dialog['messages'][$i];
+            $i--;
+        }
+
+        if(!in_array($message['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
+            return false;
+        }
+
+        return Carbon::parse($message['created_at']);
+    }
+
+    /**
+     * Получение списка ид операторов онлайн.
+     *
+     * @return array
+     */
+    public function getListOnlineOperatorsIds()
+    {
+        $operators = $this->sendRequest('operators', []);
+
+        $online_operators_ids = [];
+
+        foreach($operators as $operator) {
+            if(in_array('operator', $operator['roles']) && $operator['status'] == 'online') {
+                $online_operators_ids[] = $operator['id'];
+            }
+        }
+
+        return $online_operators_ids;
+    }
+
+    /**
+     * Перевод чата на оператора.
+     *
+     * @param int $client_id
+     * @param int $operator_id
+     * @return bool
+     */
+    public function redirectClientToChat($client_id, $operator_id)
+    {
+        $data = [
+            'chat_id' => $client_id,
+            'operator_id' => $operator_id,
+        ];
+
+        return (bool) $this->sendRequest('redirect_chat', $data);
+
+    }
+
+    /**
+     * Закрытие чата.
+     *
+     * @param $client_id
+     * @return bool
+     */
+    public function closeChat($client_id)
+    {
+        $data = [
+            'chat_id' => $client_id
+        ];
+
+        return (bool) $this->sendRequest('close_chat', $data);
+    }
+
+    /**
+     * Проверка был ли передан диалог боту.
+     *
+     * @param array $dialog
+     * @return bool
+     */
+    public function isDialogRedirectedToBot(array $dialog)
+    {
+        $messages = $dialog['messages'];
+        $redirected_message = "Диалог был передан оператору {$this->config['bot_name']}";
+
+        $result = false;
+
+        for($i = count($messages)-1; $i > 0; $i--) {
+            if ($messages[$i]['kind'] == 'info') {
+                $text = $messages[$i]['text'] ?? $messages[$i]['message'];
+
+                if ($text == $redirected_message) {
+                    $result = true;
+                }
+            } else {
+                break;
+            }
+        }
+
+        return $result;
     }
 
     //****************************************************************
@@ -311,284 +598,14 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     * Получение диалога с клиентом.
+     * Проверка секретки.
      *
-     * @param int $client_id
-     * @param array $period
-     * @return array|mixed
-     */
-    public function getDialogFromClient($client_id, array $period = [])
-    {
-        /**
-         * Фомирование временных рамок в нужном формате.
-         *
-         * @var \Carbon\Carbon $date_start
-         * @var \Carbon\Carbon $date_end
-         */
-        $date_start = $period[0] ?? Carbon::now()->startOfDay();
-        $date_end = $period[1] ?? Carbon::now();
-
-        $dialog = $this->sendRequest("chat", ['id' => $client_id]);
-
-        $messages = [];
-        $all_messages = $dialog['chat']['messages'];
-
-        foreach($all_messages as $key=>$message) {
-            if(Carbon::parse($message['created_at']) > $date_end) {
-                break;
-            }
-
-            if(in_array($message['kind'], ['visitor', 'operator', 'keyboard', 'keyboard_response']) && Carbon::parse($message['created_at']) >= $date_start) {
-                $messages[] = $message;
-            }
-        }
-
-        $dialog['chat']['messages'] = $messages;
-
-        return $dialog['chat'];
-    }
-
-    public function getDialogsByPeriod(array $period)
-    {
-        /**
-         * Фомирование временных рамок в нужном формате.
-         *
-         * @var \Carbon\Carbon $date_start
-         * @var \Carbon\Carbon $date_end
-         */
-        $date_start = $period[0] ?? Carbon::now()->startOfDay();
-        $date_end = $period[1] ?? Carbon::now();
-
-        $chats = [];
-        $more_chats_available = true;
-
-        while($more_chats_available) {
-            $result = $this->sendRequest('chats', ['since' => isset($result['last_ts']) ? $result['last_ts'] : 0]);
-
-            $find_chats = false;
-
-            foreach($result['chats'] as $chat) {
-
-                $i = count($chat['state_history'])-2;
-                $state = array_pop($chat['state_history']);
-
-                while(($state['state'] == 'closed' || $state['state'] == 'closed_by_operator') && $i >= 0) {
-                    $state = $chat['state_history'][$i];
-                    $i--;
-                }
-
-                $change_time = Carbon::parse($state['at']);
-                if($change_time >= $date_start && $change_time <= $date_end) {
-                    $chats[] = $chat;
-                    $find_chats = true;
-                }
-            }
-
-            if(!empty($chats) && (!$find_chats && $more_chats_available)) {
-                $more_chats_available = false;
-            }
-        }
-
-        return $chats;
-    }
-
-    /**
-     * Поиск сообщения от оператора.
-     *
-     * @param string $select_message
-     * @param array $messages
-     * @return int|null
-     */
-    public function findMessageFromOperator($select_message, array $messages)
-    {
-        foreach ($messages as $key => $message) {
-            if ($message['kind'] == 'operator') {
-
-                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['message']))) {
-                    $script_message_id = $key;
-                    //break;
-                }
-            }
-        }
-
-        return $script_message_id ?? null;
-    }
-
-    /**
-     * Получение сообщений клиента если нет сообщений оператора.
-     *
-     * @param array $messages
-     * @param int $offset
-     * @return false|string
-     */
-    public function getClientMessagesIfNoOperatorMessages(array $messages, $offset = 0)
-    {
-        $client_messages = '';
-
-        for ($i = ($offset + 1); $i < count($messages); $i++) {
-
-            if ($messages[$i]['kind'] == 'visitor') {
-                $client_messages .= $messages[$i]['message'];
-            } elseif ($messages[$i]['kind'] == 'keyboard_response') {
-                $client_messages .= $messages[$i]['data']['button']['text'];
-            } else {
-                return false;
-                break;
-            }
-        }
-
-        return $client_messages;
-    }
-
-    /**
-     * Проверка отправил ли клиент сообщение после сообщения оператора.
-     *
-     * @param string $message_text
-     * @param array $messages
+     * @param string $request_secret
      * @return bool
      */
-    public function isClientSentMessageAfterOperatorMessage($message_text, array $messages)
+    protected function checkSecret($request_secret)
     {
-        $is_client_sent_message = false;
-
-        foreach ($messages as $key => $message) {
-            if ($message['kind'] == 'operator') {
-
-                if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($message_text)) {
-                    $script_message_id = $key;
-                    break;
-                }
-            }
-        }
-
-        if (!empty($script_message_id)) {
-            for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
-
-                if ($messages[$i]['kind'] == 'visitor') {
-                    $is_client_sent_message = true;
-                }
-
-            }
-        }
-
-        return $is_client_sent_message;
-    }
-
-    /**
-     * Поиск сообщений оператора.
-     *
-     * @param array $messages
-     * @return array
-     */
-    public function findOperatorMessages(array $messages)
-    {
-        $operator_messages = '';
-
-        foreach ($messages as $message) {
-            if ($message['kind'] == 'operator') {
-                $operator_messages .= $message['message'];
-            }
-        }
-
-        return $operator_messages;
-    }
-
-    /**
-     * Поиск сообщений от клиента.
-     *
-     * @param array $dialog
-     * @return array
-     */
-    public function findClientMessages(array $messages)
-    {
-        $client_messages = '';
-
-        foreach ($messages as $message) {
-            if ($message['kind'] == 'visitor') {
-                $client_messages .= $message['message'];
-            } elseif ($message['kind'] == 'keyboard_response') {
-                $client_messages .= $message['data']['button']['text'];
-            }
-        }
-
-        return $client_messages;
-    }
-
-    public function getOperatorMessages($client_id, array $period)
-    {
-        // TODO: Implement getOperatorMessages() method.
-    }
-
-    public function checkEnabledUserIds(array $only_user_ids, array $data)
-    {
-        $chat_id = $this->getParamFromDataWebhook('client_id', $data);
-
-        if (!empty($only_user_ids) && (empty($chat_id) || ! in_array($chat_id, $only_user_ids))) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Получение даты и времени последнего сообщения клиента.
-     *
-     * @param array $dialog
-     * @return \Carbon\Carbon|false
-     */
-    public function getDateTimeClientLastMessage($dialog)
-    {
-        $i = count($dialog['messages'])-1;
-        $message = $dialog['messages'][$i];
-
-        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
-            $message = $dialog['messages'][$i];
-            $i--;
-        }
-
-        if(!in_array($message['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
-            return false;
-        }
-
-        return Carbon::parse($message['created_at']);
-    }
-
-    /**
-     * Получение списка ид операторов онлайн.
-     *
-     * @return array
-     */
-    public function getListOnlineOperatorsIds()
-    {
-        $operators = $this->sendRequest('operators', []);
-
-        $online_operators_ids = [];
-
-        foreach($operators as $operator) {
-            if(in_array('operator', $operator['roles']) && $operator['status'] == 'online') {
-                $online_operators_ids[] = $operator['id'];
-            }
-        }
-
-        return $online_operators_ids;
-    }
-
-    /**
-     * Перевод чата на оператора.
-     *
-     * @param int $client_id
-     * @param int $operator_id
-     * @return bool
-     */
-    public function redirectClientToChat($client_id, $operator_id)
-    {
-        $data = [
-            'chat_id' => $client_id,
-            'operator_id' => $operator_id,
-        ];
-
-        return (bool) $this->sendRequest('redirect_chat', $data);
-
+        return empty($this->config['webhook_secret']) || $this->config['webhook_secret'] == $request_secret;
     }
 
     /**

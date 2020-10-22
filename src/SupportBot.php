@@ -64,22 +64,62 @@ class SupportBot
             return false;
         }
 
-        /**
-         * Проверка фильтра пользователей по id на сайте.
-         */
-        if(!$this->online_consultant->checkEnabledUserIds($this->config['enabled_for_user_ids'], $data)) {
-            return false;
-        }
-
         $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
 
         if(!empty($this->config['scripts']['enabled']) && !empty($search_id)) {
             /**
              * Планирование отложенного сценария для удержания пользователя.
              */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($search_id)) {
-                return true;
+            if($this->support_bot_scripts->checkEnabledUserIds($search_id)) {
+
+                $result_handle = $this->support_bot_scripts->handleScriptForUserIfExists($search_id);
+
+                if($result_handle == 'processing') {
+                    return true;
+                } else {
+                    if(!$result_handle) {
+                        if ($this->config['online_consultant'] == 'webim') {
+
+                            if($data['event'] == 'new_chat') {
+                                $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [
+                                    Carbon::now()->subDay(1),
+                                    Carbon::parse('2020-10-22T10:25:57Z')
+                                ]);
+
+                                $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
+
+                                if ($this->online_consultant->isDialogRedirectedToBot($dialog)) {
+                                    $result = $this->support_bot_scripts->planingScriptForUser($search_id, $dialog);
+                                    
+                                    if ($result) {
+                                        return true;
+                                    } else {
+                                        $this->online_consultant->closeChat($search_id);
+
+                                        return false;
+                                    }
+                                }
+                            }
+                        }
+                    } elseif($this->config['online_consultant'] == 'webim'
+                        && $data['event'] == 'new_chat'
+                            && $this->online_consultant->isDialogRedirectedToBot($data['messages'])
+                    ) {
+                        return true;
+                    } else {
+                        $this->support_bot_scripts->planingScriptForUser($search_id);
+                    }
+                }
             }
+        }
+
+        dd('2');
+
+        /**
+         * Проверка фильтра пользователей по id на сайте.
+         */
+        if(!$this->online_consultant->checkEnabledUserIds($this->config['enabled_for_user_ids'], $data)) {
+            return false;
         }
 
         /**
@@ -107,13 +147,6 @@ class SupportBot
          * Бот отключен.
          */
         if(!$this->config['enabled']) {
-            return false;
-        }
-
-        /**
-         * Проверка наличия оператора.
-         */
-        if(!$this->online_consultant->checkOperator($data)) {
             return false;
         }
 
@@ -372,6 +405,7 @@ class SupportBot
 
     /**
      * Проверка на факт приветсвия клиента за текущий день.
+     * TODO: проверить метод.
      *
      * @param array $data
      * @return bool
@@ -393,14 +427,15 @@ class SupportBot
         /**
          * Получение сообщений за сегодняшний день и поиск приветствия с нашей стороны.
          */
-        $today_messages = $this->online_consultant->getOperatorMessages($search_id, ['from' => Carbon::now()->startOfDay(), 'to' => Carbon::now()->endOfDay()]);
+        $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->startOfDay(), Carbon::now()->endOfDay()]);
+        $today_operator_messages = $this->online_consultant->findOperatorMessages($dialog);
 
-        if(empty($today_messages)) {
+        if(empty($today_operator_messages)) {
             $this->cache->set($cache_key, 1, now()->endOfDay());
             return false;
         }
 
-        foreach ($today_messages as $message) {
+        foreach ($today_operator_messages as $message) {
             if(preg_match('/(?:Здравствуйте|Добрый день|Доброе утро|Добрый вечер)/iu', $message)) {
                 return true;
             }

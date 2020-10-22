@@ -42,33 +42,67 @@ class SupportBotScript
     }
 
     /**
-     * Планировка или обработка сценария для пользователя.
+     * Проверка фильтра пользователей по id на сайте.
      *
-     * @param int $search_id
+     * @param int $client_id
      * @return bool
      */
-    public function planingOrProcessScriptForUser($search_id)
+    public function checkEnabledUserIds($client_id)
     {
-        /**
-         * Проверка фильтра пользователей по id на сайте.
-         */
         $only_user_ids = $this->config['scripts']['enabled_for_user_ids'] ?? [];
 
-        if(!empty($only_user_ids) && !in_array($search_id, $only_user_ids)) {
+        if(!empty($only_user_ids) && !in_array($client_id, $only_user_ids)) {
             return false;
         }
 
+        return true;
+    }
+
+    /**
+     * Обработка сценария для пользователя если скрипт существует.
+     *
+     * @param $search_id
+     * @return string|bool
+     */
+    public function handleScriptForUserIfExists($search_id)
+    {
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
         $script = $this->scripts_repository->findBy(['search_id' => $search_id]);
 
-        if(is_null($script)) {
-            $this->planningPendingScripts($search_id);
-        } else {
+        if(!is_null($script)) {
             if($script->step > 0) {
                 if ($this->processScript($script)) {
-                    return true;
+                    return 'processing';
                 }
+            } else {
+                return 'found';
             }
+        }
+
+        return false;
+    }
+
+    /**
+     * Планировка сценария для пользователя.
+     *
+     * @param int $search_id
+     * @param array $dialog
+     * @return bool
+     */
+    public function planingScriptForUser($search_id, array $dialog)
+    {
+        if($this->config['online_consultant'] == 'webim') {
+            $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
+
+            if($this->checkDialogScriptLaunchConditions($messages)) {
+                $this->planningPendingScripts($search_id);
+                
+                return true;
+            }
+        } else {
+            $this->planningPendingScripts($search_id);
+            
+            return true;
         }
 
         return false;
@@ -89,11 +123,10 @@ class SupportBotScript
         /**
          * Получение сообщений с пользователем.
          *
-         * TODO: убрать метод сделать напрямую.
          */
-        $dialog = $this->getClientDialog($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
+        $dialog =  $this->online_consultant->getDialogFromClient($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
-        if(!$dialog) {
+        if(empty($dialog)) {
             return false;
         }
 
@@ -109,9 +142,9 @@ class SupportBotScript
         } else {
 
             /**
-             * Получение последнего сообщения сценария отправленного ботом.
+             * Получение сообщений клиента полученных после последнего сообщения сценария.
              */
-            $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
+            $client_messages = implode('', $this->getClientMessageAfterLastScriptMessage($script, $messages));
 
 
             if (!empty($client_messages)) {
@@ -225,7 +258,7 @@ class SupportBotScript
              *
              * TODO: раскоментировать после проверки.
              */
-            $dialog = $this->online_consultant->getDialogFromClient($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
+            $dialog = $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
             /*$datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);*/
 
@@ -253,6 +286,10 @@ class SupportBotScript
         }
     }
 
+    //****************************************************************
+    //*************************** Support ****************************
+    //****************************************************************
+
     /**
      * Получение сообщения и ID клиента для сценария.
      *
@@ -262,31 +299,12 @@ class SupportBotScript
      */
     private function getResultForScript($script, array $dialog)
     {
-        $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
-        
-        $operator_messages = $this->online_consultant->findOperatorMessages($messages);
-        $client_messages = $this->online_consultant->findClientMessages($messages);
+        $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
 
-        /**
-         * Получение исключений.
-         */
-        $exceptions = $this->scripts_exception_repository->getAllException();
-
-        if (preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
-
-            foreach ($exceptions as $exception) {
-
-                if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
-                    $stop_word = true;
-                    break;
-                }
-            }
-
-            if (empty($stop_word)) {
-                $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
-                $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
-            }
+        if ($this->checkDialogScriptLaunchConditions($messages)) {
+            $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
+            $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
         }
 
         if(empty($result)) {
@@ -301,6 +319,41 @@ class SupportBotScript
     }
 
     /**
+     * Проверка диалога на условия запуска скрипта.
+     *
+     * @param array $messages
+     * @return bool
+     */
+    protected function checkDialogScriptLaunchConditions(array $messages)
+    {
+        if(empty($messages)) {
+            return false;
+        }
+
+        $operator_messages = implode('', $this->online_consultant->findOperatorMessages($messages));
+        $client_messages = implode('', $this->online_consultant->findClientMessages($messages));
+
+        /**
+         * Получение исключений.
+         */
+        $exceptions = $this->scripts_exception_repository->getAllException();
+
+        if (!preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
+            return false;
+        }
+
+        foreach ($exceptions as $exception) {
+
+            if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
+                return false;
+                break;
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * Получение диалога с клиентом.
      *
      * @param int $search_id
@@ -312,7 +365,7 @@ class SupportBotScript
         /**
          * Получение сообщений.
          */
-        $dialog =  $this->online_consultant->getDialogFromClient($search_id, $filter);
+        $dialog =  $this->online_consultant->getDialogFromClientByPeriod($search_id, $filter);
 
         return empty($dialog) ? false : $dialog;
     }
@@ -322,7 +375,7 @@ class SupportBotScript
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
      * @param array $messages
-     * @return bool|string
+     * @return bool|array
      */
     private function getClientMessageAfterLastScriptMessage($script, $messages)
     {
@@ -356,20 +409,27 @@ class SupportBotScript
             $select_message .= ')';
         }
 
-        $script_message_id = $this->online_consultant->findMessageFromOperator($select_message, $messages);
+        $script_message_id = $this->online_consultant->findMessageKey($select_message, $this->online_consultant->findOperatorMessages($messages));
 
-        $client_messages = '';
+        $client_messages = [];
+
+        /**
+         * TODO: проверить работу функции.
+         */
 
         if (!empty($script_message_id)) {
-            $client_messages = $this->online_consultant->getClientMessagesIfNoOperatorMessages($messages, ($script_message_id + 1));
+
+            $messages = array_slice($messages, ($script_message_id + ($this->config['online_consultant'] == 'webim') ? 2 : 1));
 
             /**
              * Удаление скрипта в случае если диалог подхватил реальный оператор.
              */
-            if($client_messages === false) {
+            if(!empty($this->online_consultant->findOperatorMessages($messages))) {
                 $script->delete();
 
                 return false;
+            } else {
+                $client_messages = $this->online_consultant->findClientMessages($messages);
             }
         }
 

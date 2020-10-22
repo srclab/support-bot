@@ -115,12 +115,12 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
-     * Получение списка сообщений.
+     * Получение списка сообщений за период.
      *
-     * @param array $filter
+     * @param array $period
      * @return array
      */
-    public function getDialogsByPeriod(array $filter)
+    public function getDialogsByPeriod(array $period)
     {
         /**
          * Фомирование временных рамок в нужном формате.
@@ -128,13 +128,8 @@ class TalkMe implements OnlineConsultant
          * @var \Carbon\Carbon $date_start
          * @var \Carbon\Carbon $date_end
          */
-        $date_start = $filter['period'][0] ?? Carbon::now()->startOfDay();
-        $date_end = $filter['period'][1] ?? Carbon::now();
-
-        /**
-         * Основные параметры запроса, если они были переданы.
-         */
-        $data = Arr::except($filter, 'period');
+        $date_start = $period[0] ?? Carbon::now()->startOfDay();
+        $date_end = $period[1] ?? Carbon::now();
 
         if($date_end->diffInDays($date_start) <= 14) {
 
@@ -143,7 +138,7 @@ class TalkMe implements OnlineConsultant
                 'stop' => $date_end->toDateString(),
             ];
 
-            $messages = $this->sendRequest('message', $data);
+            $messages = $this->sendRequest('message', []);
 
             return $messages === false ? [] : $messages;
 
@@ -158,7 +153,7 @@ class TalkMe implements OnlineConsultant
                     'stop' => $date_end->toDateString(),
                 ];
 
-                $result = $this->sendRequest('message', $data);
+                $result = $this->sendRequest('message', []);
 
                 if($result === false) break;
 
@@ -237,14 +232,241 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
-     * Проверка секретки.
+     * Проверка полученных данных в вебхуке, определение возможности сформировать ответ.
      *
-     * @param string $request_secret
+     * @param array $data
      * @return bool
      */
-    public function checkSecret($request_secret)
+    public function checkWebhookData(array $data)
     {
-        return empty($this->config['webhook_secret']) || $this->config['webhook_secret'] == $request_secret;
+        /**
+         * Проверка секретки.
+         */
+        if(!$this->checkSecret($data['secretKey'] ?? null)) {
+            Log::warning('[SrcLab\SupportBot] Получен неверный секретный ключ.', $data);
+            return false;
+        }
+
+        /**
+         * Проверка наличия сообщения.
+         */
+        if(empty($data['message'])) {
+            Log::error('[SrcLab\SupportBot] Сообщение не получено.', $data);
+            return false;
+        }
+
+        /**
+         * Проверка наличия оператора.
+         */
+        if(empty($data['operator']['login'])) {
+            Log::error('[SrcLab\SupportBot] Не найден оператор.', $data);
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Получение диалога с клиентом.
+     *
+     * @param int $client_id
+     * @param array $period
+     * @return array
+     */
+    public function getDialogFromClientByPeriod($client_id, array $period = [])
+    {
+        /**
+         * Фомирование временных рамок в нужном формате.
+         *
+         * @var \Carbon\Carbon $date_start
+         * @var \Carbon\Carbon $date_end
+         */
+        $date_start = $period[0] ?? Carbon::now()->startOfDay();
+        $date_end = $period[1] ?? Carbon::now();
+
+        $result = $this->getDialogsByPeriod([
+            'period' => [$date_start, $date_end],
+            'client' => [
+                'searchId' => $client_id
+            ],
+        ]);
+
+        return array_shift($result);
+    }
+
+    /**
+     * Получение параметра из данных вебхука.
+     *
+     * @param string $param
+     * @param array $data
+     * @return mixed
+     */
+    public function getParamFromDataWebhook($param, array $data)
+    {
+        switch($param) {
+            case 'client_id':
+                return $data['client']['clientId'] ?? null;
+            case 'search_id':
+                return $data['client']['searchId'] ?? null;
+            case 'message_text':
+                return $data['message']['text'] ?? null;
+            case 'operator_login':
+                return $data['operator']['login'] ?? null;
+            case 'messages':
+                return null;
+            default:
+                throw new Exception('Неизвестная переменная для получения из данных webhook.');
+        }
+    }
+
+    /**
+     * Получение параметров диалога.
+     *
+     * @param string $param
+     * @param array $dialog
+     * @return mixed
+     */
+    public function getParamFromDialog($param, array $dialog)
+    {
+        switch($param) {
+            case 'name':
+                return $dialog['name'] ?? null;
+                break;
+            case 'messages':
+                return $dialog['messages'];
+                break;
+            case 'clientId':
+                return $dialog['clientId'];
+                break;
+            default:
+                throw new Exception('Неизвестная переменная для получения из данных диалога.');
+        }
+    }
+
+    /**
+     * Проверка фильтра пользователей по id на сайте.
+     *
+     * @param array $only_user_ids
+     * @param array $data
+     * @return bool
+     */
+    public function checkEnabledUserIds(array $only_user_ids, array $data)
+    {
+        if(!empty($only_user_ids)
+            && (empty($data['client']['customData']['user_id'])
+                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Поиск ключа сообщения в массиве сообщений.
+     *
+     * @param string $select_message
+     * @param array $messages
+     * @return int|null
+     */
+    public function findMessageKey($select_message, array $messages)
+    {
+        /**
+         * TODO: вернуть break; после проверки.
+         */
+        foreach ($messages as $key => $message) {
+            if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
+                $message_id = $key;
+                //break;
+            }
+        }
+
+        return $message_id ?? null;
+    }
+
+    /**
+     * Поиск сообщений оператора.
+     * TODO: проверить метод ( добавил messageType ).
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findOperatorMessages(array $messages)
+    {
+        $operator_messages = [];
+
+        foreach ($messages as $message) {
+            if ($message['whoSend'] == 'operator' && (empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage'))) {
+                $operator_messages[] = $message['message'];
+            }
+        }
+
+        return $operator_messages;
+    }
+
+    /**
+     * Поиск сообщений от клиента.
+     *
+     * @param array $messages
+     * @return array
+     */
+    public function findClientMessages(array $messages)
+    {
+        $client_message = [];
+
+        foreach ($messages as $message) {
+            if ($message['whoSend'] == 'client') {
+                $client_message[] = $message['message'];
+            }
+        }
+
+        return $client_message;
+    }
+
+    /**
+     * Получение даты и времени последнего сообщения клиента.
+     *
+     * @param array $dialog
+     * @return \Carbon\Carbon|false
+     */
+    public function getDateTimeClientLastMessage($dialog)
+    {
+        $i = count($dialog['messages'])-1;
+        $message = $dialog['messages'][$i];
+
+        while($i >= 0 && $dialog['messages'][$i]['whoSend'] != 'client') {
+            $message = $dialog['messages'][$i];
+            $i--;
+        }
+
+        if($message['whoSend'] != 'client') {
+            return false;
+        }
+
+        return Carbon::parse($message['dateTime']);
+    }
+
+    /**
+     * Получение списка ид операторов онлайн.
+     * TODO: реализовать метод.
+     *
+     * @return array
+     */
+    public function getListOnlineOperatorsIds()
+    {
+        return [];
+    }
+
+    /**
+     * Перевод чата на оператора.
+     *
+     * @param int $client_id
+     * @param int $operator_id
+     * @return bool
+     */
+    public function redirectClientToChat($client_id, $operator_id)
+    {
+        return true;
     }
 
     //****************************************************************
@@ -302,273 +524,14 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
-     * Проверка полученных данных в вебхуке, определение возможности сформировать ответ.
+     * Проверка секретки.
      *
-     * @param array $data
+     * @param string $request_secret
      * @return bool
      */
-    public function checkWebhookData(array $data)
+    protected function checkSecret($request_secret)
     {
-        /**
-         * Проверка секретки.
-         */
-        if(!$this->checkSecret($data['secretKey'] ?? null)) {
-            Log::warning('[SrcLab\SupportBot] Получен неверный секретный ключ.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка наличия сообщения.
-         */
-        if(empty($data['message'])) {
-            Log::error('[SrcLab\SupportBot] Сообщение не получено.', $data);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Проверка наличия оператора.
-     *
-     * @param array $data
-     * @return bool
-     */
-    public function checkOperator(array $data)
-    {
-        /**
-         * Проверка наличия оператора.
-         */
-        if(empty($data['operator']['login'])) {
-            Log::error('[SrcLab\SupportBot] Не найден оператор.', $data);
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Получение диалога с клиентом.
-     *
-     * @param int $client_id
-     * @param array $period
-     * @return array|mixed
-     */
-    public function getDialogFromClient($client_id, array $period = [])
-    {
-        $result = $this->getDialogsByPeriod([
-            'period' => $period,
-            'client' => [
-                'searchId' => $client_id
-            ],
-        ]);
-
-        return array_shift($result);
-    }
-
-    /**
-     * Получение параметра из данных вебхука.
-     *
-     * @param string $param
-     * @param array $data
-     * @return int|null
-     */
-    public function getParamFromDataWebhook($param, array $data)
-    {
-        switch($param) {
-            case 'client_id':
-                return $data['client']['clientId'] ?? null;
-            case 'search_id':
-                return $data['client']['searchId'] ?? null;
-            case 'message_text':
-                return $data['message']['text'] ?? null;
-            case 'operator_login':
-                return $data['operator']['login'] ?? null;
-            default:
-                return null;
-        }
-    }
-
-    /**
-     * Получение параметров диалога.
-     *
-     * @param string $param
-     * @param array $dialog
-     * @return mixed
-     */
-    public function getParamFromDialog($param, array $dialog)
-    {
-        switch($param) {
-            case 'name':
-                return $dialog['name'] ?? null;
-                break;
-            case 'messages':
-                return $dialog['messages'];
-                break;
-            case 'clientId':
-                return $dialog['clientId'];
-                break;
-            default:
-                throw new Exception('Неизвестная переменная для получения из данных диалога.');
-        }
-    }
-
-    /**
-     * Проверка отправил ли клиент сообщение после сообщения оператора.
-     *
-     * @param string $message_text
-     * @param array $messages
-     * @return bool
-     */
-    public function isClientSentMessageAfterOperatorMessage($message_text, array $messages)
-    {
-        $is_client_sent_message = false;
-
-        foreach ($messages as $key => $message) {
-            if ($message['whoSend'] == 'operator') {
-
-                if ($this->deleteControlCharactersAndSpaces($message['text']) == $this->deleteControlCharactersAndSpaces($message_text)) {
-                    $script_message_id = $key;
-                    break;
-                }
-            }
-        }
-
-        if (!empty($script_message_id)) {
-            for ($i = ($script_message_id + 1); $i < count($messages); $i++) {
-
-                if ($messages[$i]['whoSend'] == 'client') {
-                    $is_client_sent_message = true;
-                }
-
-            }
-        }
-
-        return $is_client_sent_message;
-    }
-
-    public function getOperatorMessages($client_id, array $period)
-    {
-        $filter = [
-            'period' => [$period['from'], $period['to']],
-            'client' => [
-                'searchId' => $client_id,
-            ]
-        ];
-
-        $today_messages = $this->getDialogsByPeriod($filter);
-
-        $messages = [];
-
-        foreach ($today_messages as $case) {
-            foreach ($case['messages'] as $message) {
-                if($message['whoSend'] != 'client') {
-                    $messages[] = $message['text'];
-                }
-            }
-        }
-
-        return $message;
-    }
-
-    public function checkEnabledUserIds(array $only_user_ids, array $data)
-    {
-        if(!empty($only_user_ids)
-            && (empty($data['client']['customData']['user_id'])
-                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
-        ) {
-            return false;
-        }
-
-        return true;
-    }
-
-    /**
-     * Поиск сообщения от оператора.
-     *
-     * @param string $select_message
-     * @param array $messages
-     * @return int|null
-     */
-    public function findMessageFromOperator($select_message, array $messages)
-    {
-        foreach ($messages as $key => $message) {
-            if ($message['whoSend'] == 'operator') {
-
-                if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
-                    $script_message_id = $key;
-                    break;
-                }
-            }
-        }
-
-        return $script_message_id ?? null;
-    }
-
-    /**
-     * Получение сообщений клиента если нет сообщений оператора.
-     *
-     * @param array $messages
-     * @param int $offset
-     * @return false|string
-     */
-    public function getClientMessagesIfNoOperatorMessages(array $messages, $offset = 0)
-    {
-        $client_messages = '';
-
-        for ($i = ($offset + 1); $i < count($messages); $i++) {
-
-            if ($messages[$i]['whoSend'] == 'client') {
-
-                $client_messages .= $messages[$i]['text'];
-            } elseif(empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage')) {
-
-                return false;
-                break;
-
-            }
-
-        }
-
-        return $client_messages;
-    }
-
-    /**
-     * Поиск сообщений оператора.
-     *
-     * @param array $messages
-     * @return array
-     */
-    public function findOperatorMessages(array $messages)
-    {
-        $operator_messages = '';
-
-        foreach ($messages as $message) {
-            if ($message['whoSend'] == 'operator') {
-                $operator_messages .= $message['message'];
-            }
-        }
-
-        return $operator_messages;
-    }
-
-    /**
-     * Поиск сообщений от клиента.
-     *
-     * @param array $messages
-     * @return array
-     */
-    public function findClientMessages(array $messages)
-    {
-        $client_message = '';
-
-        foreach ($messages as $message) {
-            if ($message['whoSend'] == 'client') {
-                $client_message .= $message['message'];
-            }
-        }
-
-        return $client_message;
+        return empty($this->config['webhook_secret']) || $this->config['webhook_secret'] == $request_secret;
     }
 
     /**
@@ -580,38 +543,5 @@ class TalkMe implements OnlineConsultant
     private function deleteControlCharactersAndSpaces($string)
     {
         return preg_replace('/[\x00-\x1F\x7F\s]/', '', $string);
-    }
-
-    /**
-     * Получение даты и времени последнего сообщения клиента.
-     *
-     * @param array $dialog
-     * @return \Carbon\Carbon|false
-     */
-    public function getDateTimeClientLastMessage($dialog)
-    {
-        $i = count($dialog['messages'])-1;
-        $message = $dialog['messages'][$i];
-
-        while($i >= 0 && $dialog['messages'][$i]['whoSend'] != 'client') {
-            $message = $dialog['messages'][$i];
-            $i--;
-        }
-
-        if($message['whoSend'] != 'client') {
-            return false;
-        }
-
-        return Carbon::parse($message['dateTime']);
-    }
-
-    /**
-     * Получение списка ид операторов онлайн.
-     *
-     * @return array
-     */
-    public function getListOnlineOperatorsIds()
-    {
-        return [];
     }
 }
