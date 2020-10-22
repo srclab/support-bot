@@ -381,7 +381,7 @@ class SupportBot
             return true;
         }
 
-        return $this->checkCurrentTime($period['day_beginning'], $period['day_end']);
+        return check_current_time($period['day_beginning'], $period['day_end']);
     }
 
     /**
@@ -524,7 +524,7 @@ class SupportBot
             return false;
         }
 
-        if(!$this->checkCurrentTime($auto_responder_config['period_begin'], $auto_responder_config['period_end'])) {
+        if(!check_current_time($auto_responder_config['period_begin'], $auto_responder_config['period_end'])) {
             return false;
         }
 
@@ -603,23 +603,4 @@ class SupportBot
 
         $this->cache->set($cache_key, $sent_today, now()->endOfDay()->addHours(3));
     }
-
-    /**
-     * Проверка, что текущее время содержится в указанном интервале.
-     *
-     * @param string $time_begin
-     * @param string $time_end
-     * @return bool
-     */
-    protected function checkCurrentTime($time_begin, $time_end)
-    {
-        $now_time = now()->format('H:i');
-
-        if($time_begin > $time_end) {
-            return !($now_time < $time_begin && $now_time > $time_end);
-        }
-
-        return $now_time >= $time_begin && $now_time <= $time_end;
-    }
-
 }

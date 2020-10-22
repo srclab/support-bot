@@ -19,4 +19,22 @@ if (!function_exists('app_config')) {
 
         return config("{$country_code}.{$key}", config($key, $default));
     }
+
+    /**
+     * Проверка, что текущее время содержится в указанном интервале.
+     *
+     * @param string $time_begin
+     * @param string $time_end
+     * @return bool
+     */
+    function check_current_time($time_begin, $time_end)
+    {
+        $now_time = now()->format('H:i');
+
+        if($time_begin > $time_end) {
+            return !($now_time < $time_begin && $now_time > $time_end);
+        }
+
+        return $now_time >= $time_begin && $now_time <= $time_end;
+    }
 }

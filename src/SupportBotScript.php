@@ -4,6 +4,7 @@ namespace SrcLab\SupportBot;
 
 use Carbon\Carbon;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 
@@ -31,6 +32,11 @@ class SupportBotScript
     protected $scripts_exception_repository;
 
     /**
+     * @var \SrcLab\SupportBot\Repositories\SupportRedirectChatRepository
+     */
+    protected $redirect_chat_repository;
+
+    /**
      * SupportBotScripts constructor.
      */
     public function __construct()
@@ -39,6 +45,7 @@ class SupportBotScript
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']]);
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
+        $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
     }
 
     /**
@@ -108,7 +115,7 @@ class SupportBotScript
          * Получение сообщений с пользователем.
          *
          */
-        $dialog =  $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
+        $dialog = $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
 
         if(empty($dialog)) {
             return false;
@@ -161,8 +168,30 @@ class SupportBotScript
                             /**
                              * TODO: предусмотреть что операторов в сети не будет, тогда выводить сообщение что все операторы не в сети и ответят в 9 часов ( отложенно перекидывать утром ).
                              */
-                            $operators = $this->online_consultant->getListOnlineOperatorsIds();
-                            $this->online_consultant->redirectClientToChat($script->search_id, $operators[array_rand($operators)]);
+
+                            if(!empty($this->config['redirect_chats']['working_hours']['period_begin']) && !empty($this->config['redirect_chats']['working_hours']['period_end']) && !check_current_time($this->config['redirect_chats']['working_hours']['period_begin'], $this->config['redirect_chats']['working_hours']['period_end'])) {
+
+                                $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
+
+                                $this->online_consultant->sendMessage($client_id, $this->config['redirect_chats']['message_not_working_hours']);
+
+                                $this->redirect_chat_repository->addRecord($client_id);
+
+                            } else {
+                                $operators_ids = $this->online_consultant->getListOnlineOperatorsIds();
+
+                                if(empty($operators_ids)) {
+
+                                    $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
+
+                                    $this->online_consultant->sendMessage($this->online_consultant->getParamFromDialog('clientId', $dialog), $this->config['redirect_chats']['message_not_operators']);
+
+                                    $this->redirect_chat_repository->addRecord($client_id);
+                                } else {
+                                    $this->online_consultant->redirectClientToChat($script->search_id, $operators_ids[array_rand($operators_ids)]);
+                                }
+                            }
+
                         } elseif (!empty($variant['is_final'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
