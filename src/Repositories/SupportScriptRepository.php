@@ -27,9 +27,26 @@ class SupportScriptRepository extends Repository
     public function getNextScripts()
     {
         return $this->query()
-            ->where('send_message_at', '<', Carbon::now())
-            ->where('step', 0)
+            ->where([
+                ['send_message_at', '<', Carbon::now()],
+                ['step', 0]
+            ])
             ->limit(20)
+            ->get();
+    }
+
+    /**
+     * Получение очередной пачки скриптов без ответа.
+     *
+     * @return \Illuminate\Database\Eloquent\Collection
+     */
+    public function getNextUnansweredScripts()
+    {
+        return $this->query()
+            ->where([
+                ['user_answered', true],
+                ['start_script_at', '<', Carbon::now()->subDays(1)]
+            ])
             ->get();
     }
 

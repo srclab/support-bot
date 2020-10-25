@@ -7,6 +7,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
+use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use Throwable;
 
 class SupportBot
@@ -38,6 +39,11 @@ class SupportBot
     protected $support_bot_scripts;
 
     /**
+     * @var \SrcLab\SupportBot\Repositories\SupportRedirectChatRepository
+     */
+    protected $redirect_chat_repository;
+
+    /**
      * SupportAutoAnswering constructor.
      */
     public function __construct()
@@ -46,6 +52,7 @@ class SupportBot
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
         $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']]);
         $this->support_bot_scripts = app(SupportBotScript::class);
+        $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
         $this->cache = app('cache');
     }
 
@@ -551,9 +558,6 @@ class SupportBot
 
         $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
 
-        /**
-         * TODO: возвращало true ( проверить правильно ли работает )
-         */
         if(!empty($just_sent_clients[$client_id])) {
             return false;
         }
@@ -564,6 +568,11 @@ class SupportBot
         $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'Offline' ? null : $data['operator']['login'];
 
         $this->sendMessage($client_id, $auto_responder_config['message'], $operator);
+
+        /**
+         * Отложенный редирект пользователя в рабочее время.
+         */
+        $this->redirect_chat_repository->addRecord($client_id);
 
         /**
          * Отметка что сегодня уже был отправлен автоответ.

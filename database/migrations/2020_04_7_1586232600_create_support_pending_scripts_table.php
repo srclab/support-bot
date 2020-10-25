@@ -33,6 +33,8 @@ class CreateSupportPendingScriptsTable extends Migration
                 $table->tinyInteger('step')->default(0);
                 $table->tinyInteger('prev_step')->nullable();
                 $table->dateTime('send_message_at');
+                $table->boolean('user_answered')->default(false);
+                $table->dateTime('start_script_at')->nullable();
             });
         }
     }

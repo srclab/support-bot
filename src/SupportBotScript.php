@@ -130,13 +130,6 @@ class SupportBotScript
              */
             $result = $this->getFinalMessageAndDeactivateScript($script);
 
-            /**
-             * Закрытие диалога.
-             */
-            if($this->config['online_consultant'] == 'webim') {
-                $this->online_consultant->closeChat($script->search_id);
-            }
-
         } else {
 
             /**
@@ -199,13 +192,6 @@ class SupportBotScript
                             $script->step = -1;
                             $script->save();
 
-                            /**
-                             * Закрытие диалога.
-                             */
-                            if($this->config['online_consultant'] == 'webim') {
-                                $this->online_consultant->closeChat($script->search_id);
-                            }
-
                         } elseif (!empty($variant['next_step'])) {
                             /**
                              * Установка следующего шага и сохранения предидущего.
@@ -233,18 +219,19 @@ class SupportBotScript
                  */
                 if (empty($result)) {
                     $result = $this->getFinalMessageAndDeactivateScript($script);
-
-                    /**
-                     * Закрытие диалога.
-                     */
-                    if($this->config['online_consultant'] == 'webim') {
-                        $this->online_consultant->closeChat($script->search_id);
-                    }
                 }
             }
         }
 
         if(!empty($result)) {
+
+            /**
+             * Установка флага пользователь ответил.
+             */
+            if(!$script->user_answered) {
+                $script->user_answered = true;
+                $script->save();
+            }
 
             $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
 
@@ -259,6 +246,13 @@ class SupportBotScript
                 $this->online_consultant->sendButtonsMessage($client_id, $buttons);
             }
 
+            /**
+             * Закрытие диалога если сообщение финальное для Webim.
+             */
+            if($script->step == -1 && $this->config['online_consultant'] == 'webim') {
+                $this->online_consultant->closeChat($script->search_id);
+            }
+
             return true;
 
         }
@@ -267,7 +261,7 @@ class SupportBotScript
     }
 
     /**
-     * Запуск сценария для пользователя.
+     * Запуск сценария для пользователей.
      */
     public function sendStartMessageForUsers()
     {
@@ -284,37 +278,7 @@ class SupportBotScript
 
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
         foreach($scripts as $script) {
-
-            /**
-             * Проверка времени последнего сообщения клиента.
-             *
-             * TODO: раскоментировать после проверки.
-             */
-            $dialog = $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
-
-            /*$datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);*/
-
-            /** @var \Carbon\Carbon $datetime_message_client */
-            /*if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
-                $script->send_message_at = $datetime_message_client->addHour(3);
-                $script->save();
-                continue;
-            }*/
-
-            $result = $this->getResultForScript($script, $dialog);
-
-            if (!empty($result)) {
-
-                $script->step++;
-                $script->prev_step = 0;
-                $script->save();
-
-                $this->online_consultant->sendMessage($result['clientId'], $this->replaceMultipleSpacesWithLineBreaks($result['result']));
-                $this->online_consultant->sendButtonsMessage($result['clientId'], $result['buttons']);
-
-            } else {
-                $script->delete();
-            }
+            $this->startScript($script);
         }
     }
 
@@ -323,31 +287,66 @@ class SupportBotScript
     //****************************************************************
 
     /**
-     * Получение сообщения и ID клиента для сценария.
+     * Запуск сценария для пользователя.
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
-     * @param array $dialog
-     * @return false|array
      */
-    private function getResultForScript($script, array $dialog)
+    private function startScript($script)
     {
+        $dialog = $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
+
+        if(empty($dialog)) {
+            $script->delete();
+            return;
+        }
+
+        /**
+         * Проверка находится ли диалог на боте для Webim.
+         */
+        if($this->config['online_consultant'] == 'webim' && $dialog['operator_id'] != $this->config['accounts']['webim']) {
+            $script->delete();
+            return;
+        }
+
+        /**
+         * TODO: раскоментировать после проверки.
+         */
+        /**
+         * Проверка времени последнего сообщения клиента.
+         */
+        /*$datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);*/
+
+        /** @var \Carbon\Carbon $datetime_message_client */
+        /*if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
+            $script->send_message_at = $datetime_message_client->addHour(3);
+            $script->save();
+            continue;
+        }*/
+
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
 
         if ($this->checkDialogScriptLaunchConditions($messages)) {
             $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
             $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
-        }
+            $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
 
-        if(empty($result)) {
-            return false;
-        }
+            $script->step++;
+            $script->prev_step = 0;
+            $script->start_script_at = Carbon::now();
+            $script->save();
 
-        return [
-            'clientId' => $this->online_consultant->getParamFromDialog('clientId', $dialog),
-            'result' => $result,
-            'buttons' => $buttons
-        ];
+            $this->online_consultant->sendMessage($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+            $this->online_consultant->sendButtonsMessage($client_id, $buttons);
+
+        } elseif($this->config['online_consultant'] == 'webim') {
+
+            $this->online_consultant->closeChat($script->search_id);
+            $script->delete();
+        } else {
+            
+            $script->delete();
+        }
     }
 
     /**
@@ -383,23 +382,6 @@ class SupportBotScript
         }
 
         return true;
-    }
-
-    /**
-     * Получение диалога с клиентом.
-     *
-     * @param int $search_id
-     * @param array $filter
-     * @return false|array
-     */
-    private function getClientDialog($search_id, array $filter)
-    {
-        /**
-         * Получение сообщений.
-         */
-        $dialog =  $this->online_consultant->getDialogFromClientByPeriod($search_id, $filter);
-
-        return empty($dialog) ? false : $dialog;
     }
 
     /**

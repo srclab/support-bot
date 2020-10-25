@@ -494,7 +494,7 @@ class Webim implements OnlineConsultant
             if ($messages[$i]['kind'] == 'info') {
 
                 if(preg_match('/Диалог был передан оператору (.*)/m', $messages[$i]['message'], $operator)) {
-                    if($operator[1] == $this->config['bot_name']) {
+                    if($operator[1] == $this->config['bot_operator_name']) {
                         return true;
                         break;
                     } else {

@@ -43,6 +43,18 @@ class SupportRedirectChatJob implements ShouldQueue
 
             /** @var \SrcLab\SupportBot\Models\SupportRedirectChatModel $redirect */
             foreach($redirects as $redirect) {
+
+                /**
+                 * Проверка находится ли диалог на боте Webim.
+                 */
+                if($config['online_consultant'] == 'webim') {
+                    $dialog = $online_consultant->getDialogFromClientByPeriod($redirect->client_id);
+
+                    if($dialog['operator_id'] != $config['accounts']['webim']['bot_operator_id']) {
+                        continue;
+                    }
+                }
+
                 $online_consultant->redirectClientToChat($redirect->client_id, $operators_ids[array_rand($operators_ids)]);
 
                 $redirect->delete();

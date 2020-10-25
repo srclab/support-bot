@@ -8,6 +8,11 @@ class SupportScriptModel extends Model
 {
     public $timestamps = false;
 
+    protected $dates = [
+        'send_message_at',
+        'start_script_at'
+    ];
+
     /**
      * SupportScriptModel constructor.
      *

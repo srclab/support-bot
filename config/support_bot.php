@@ -257,7 +257,8 @@ return [
             'login' => env('SRCLAB_SUPPORT_BOT_WEBIM_LOGIN', ''),
             'password' => env('SRCLAB_SUPPORT_BOT_WEBIM_PASSWORD', ''),
             'webhook_secret' => env('SRCLAB_SUPPORT_BOT_WEBIM_WEBHOOK_SECRET', ''),
-            'bot_name' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_NAME', ''),
+            'bot_operator_name' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_OPERATOR_NAME', ''),
+            'bot_operator_id' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_OPERATOR_ID', ''),
         ],
 
     ],
