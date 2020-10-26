@@ -99,7 +99,9 @@ class SupportBot
                                 $this->support_bot_scripts->planningPendingScripts($search_id);
                             }
 
-                            if ($this->online_consultant->isClientRedirectedToBot($search_id)) {
+                            $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->subDays(2), Carbon::now()->endOfDay()]);
+
+                            if ($this->online_consultant->isClientRedirectedToBot($dialog)) {
                                 return true;
                             }
                         }

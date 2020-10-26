@@ -24,11 +24,11 @@ class TalkMe implements OnlineConsultant
      */
     public function __construct(array $config)
     {
-        if(empty($config['talkme']) || empty($config['talkme']['api_token']) || empty($config['talkme']['default_operator'])) {
+        if(empty($config['talk_me']) || empty($config['talk_me']['api_token']) || empty($config['talk_me']['default_operator'])) {
             throw new \Exception('Не установлены конфигурационные данные для обращения к TalkMe');
         }
 
-        $this->config = $config['talkme'];
+        $this->config = $config['talk_me'];
     }
 
     /**
@@ -454,7 +454,17 @@ class TalkMe implements OnlineConsultant
      */
     public function getListOnlineOperatorsIds()
     {
-        return [];
+        $result = $this->sendRequest('operators/getList');
+
+        $online_operators_ids = [];
+
+        foreach($result['operators'] as $operator) {
+            if($operator['statusId'] == 1) {
+                $online_operators_ids[] = $operator['id'];
+            }
+        }
+
+        return $online_operators_ids;
     }
 
     /**
@@ -489,15 +499,44 @@ class TalkMe implements OnlineConsultant
             $data = json_encode($data);
         }
 
+        $autorization_methods = [
+            'query' => [
+                'message',
+                'messageToClient',
+            ],
+            'token' => [
+                'operators/getList',
+            ],
+        ];
+
         $ch = curl_init();
 
-        curl_setopt_array($ch, [
-            CURLOPT_URL => "https://lcab.talk-me.ru/api/chat/{$this->config['api_token']}/{$api_method}",
-            CURLOPT_POST => true,
-            CURLOPT_POSTFIELDS => $data,
-            CURLOPT_RETURNTRANSFER => 1,
-            CURLOPT_HTTPHEADER => ['Content-Type: application/json']
-        ]);
+        if(in_array($api_method, $autorization_methods['query'])) {
+
+            curl_setopt_array($ch, [
+                CURLOPT_URL => "https://lcab.talk-me.ru/api/chat/{$this->config['api_token']}/{$api_method}",
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $data,
+                CURLOPT_RETURNTRANSFER => 1,
+                CURLOPT_HTTPHEADER => ['Content-Type: application/json']
+            ]);
+
+        } elseif(in_array($api_method, $autorization_methods['token'])) {
+
+            curl_setopt_array($ch, [
+                CURLOPT_URL => "https://lcab.talk-me.ru/json/v1.0/chat/operator/getList",
+                CURLOPT_POST => true,
+                CURLOPT_POSTFIELDS => $data,
+                CURLOPT_RETURNTRANSFER => 1,
+                CURLOPT_HTTPHEADER => [
+                    "Content-Type: application/json",
+                    "X-Token: {$this->config['api_token']}"
+                ],
+            ]);
+
+        } else {
+            throw new Exception("[Webim] Неизвестный запрос к Talk Me ( $api_method )");
+        }
 
         $response = curl_exec($ch);
 
@@ -515,12 +554,24 @@ class TalkMe implements OnlineConsultant
          */
         $response = json_decode($response, true);
 
-        if(empty($response['ok'])) {
-            Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API: '.$api_method.', Данные: ( '.json_encode($data).' )', ['response' => $response]);
-            return false;
-        }
+        if(in_array($api_method, $autorization_methods['query'])) {
 
-        return $response['data'] ?? true;
+            if (empty($response['ok'])) {
+                Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API: '.$api_method.', Данные: ( '.json_encode($data).' )', ['response' => $response]);
+
+                return false;
+            }
+
+            return $response['data'] ?? true;
+        } else {
+            if (empty($response['success'])) {
+                Log::error('[TalkMe] Ошибка выполнения запроса к TalkMe. Метод API: '.$api_method.', Данные: ( '.json_encode($data).' )', ['response' => $response]);
+
+                return false;
+            }
+
+            return $response['result'] ?? true;
+        }
     }
 
     /**

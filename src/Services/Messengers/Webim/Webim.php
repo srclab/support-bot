@@ -476,12 +476,11 @@ class Webim implements OnlineConsultant
     /**
      * Проверка был ли клиент передан боту.
      *
-     * @param int $client_id
+     * @param array $dialog
      * @return bool
      */
-    public function isClientRedirectedToBot($client_id)
+    public function isClientRedirectedToBot($dialog)
     {
-        $dialog = $this->getDialogFromClientByPeriod($client_id, [Carbon::now()->subDays(1), Carbon::now()->endOfDay()]);
         $messages = $dialog['messages'];
 
         if(empty($messages)) {

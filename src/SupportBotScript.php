@@ -303,7 +303,7 @@ class SupportBotScript
         /**
          * Проверка находится ли диалог на боте для Webim.
          */
-        if($this->config['online_consultant'] == 'webim' && $dialog['operator_id'] != $this->config['accounts']['webim']) {
+        if(!$this->online_consultant->isClientRedirectedToBot($dialog)) {
             $script->delete();
             return;
         }
@@ -320,7 +320,7 @@ class SupportBotScript
         /*if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
             $script->send_message_at = $datetime_message_client->addHour(3);
             $script->save();
-            continue;
+            return;
         }*/
 
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
@@ -331,13 +331,13 @@ class SupportBotScript
             $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
             $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
 
+            $this->online_consultant->sendMessage($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+            $this->online_consultant->sendButtonsMessage($client_id, $buttons);
+
             $script->step++;
             $script->prev_step = 0;
             $script->start_script_at = Carbon::now();
             $script->save();
-
-            $this->online_consultant->sendMessage($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
-            $this->online_consultant->sendButtonsMessage($client_id, $buttons);
 
         } elseif($this->config['online_consultant'] == 'webim') {
 

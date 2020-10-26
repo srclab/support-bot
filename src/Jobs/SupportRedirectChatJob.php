@@ -29,7 +29,7 @@ class SupportRedirectChatJob implements ShouldQueue
     public function handle()
     {
         $config = array_merge(config('support_bot'), app_config('support_bot'));
-        $online_consultant = app(OnlineConsultant::class);
+        $online_consultant = app(OnlineConsultant::class, ['config' => $config['accounts']]);
         $support_redirect_chat_repository = app(SupportRedirectChatRepository::class);
 
         if(!empty($config['redirect_chats']['working_hours']['period_begin']) && !empty($config['redirect_chats']['working_hours']['period_end']) && !check_current_time($config['redirect_chats']['working_hours']['period_begin'], $config['redirect_chats']['working_hours']['period_end'])) {
