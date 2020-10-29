@@ -185,6 +185,8 @@ class SupportBotScript
                                 }
                             }
 
+                            return true;
+
                         } elseif (!empty($variant['is_final'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
@@ -303,7 +305,7 @@ class SupportBotScript
         /**
          * Проверка находится ли диалог на боте для Webim.
          */
-        if(!$this->online_consultant->isClientRedirectedToBot($dialog)) {
+        if($this->config['online_consultant'] == 'webim' && ($dialog['operator_id'] != $this->config['accounts']['webim']['bot_operator_id'] && !$this->online_consultant->isClientRedirectedToBot($dialog))) {
             $script->delete();
             return;
         }
@@ -449,7 +451,6 @@ class SupportBotScript
 
         return $client_messages;
     }
-
 
     /**
      * Получение финального сообщения для сценария и деактивация сценария.

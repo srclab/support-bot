@@ -44,8 +44,8 @@ class SupportScriptRepository extends Repository
     {
         return $this->query()
             ->where([
-                ['user_answered', true],
-                ['start_script_at', '<', Carbon::now()->subDays(1)]
+                ['user_answered', false],
+                ['start_script_at', '<', Carbon::now()->subDays(1)],
             ])
             ->get();
     }

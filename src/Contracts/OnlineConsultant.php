@@ -110,6 +110,14 @@ interface OnlineConsultant
     public function findMessageKey($select_message, array $messages);
 
     /**
+     * Поиск сообщений оператора и группировка по дате отправку.
+     *
+     * @param array $dialogs
+     * @return mixed
+     */
+    public function findOperatorMessagesAndGroupBySentAt(array $dialogs);
+
+    /**
      * Получение списка ид операторов онлайн.
      *
      * @return array

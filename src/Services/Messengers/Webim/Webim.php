@@ -3,8 +3,10 @@
 namespace SrcLab\SupportBot\Services\Messengers\Webim;
 
 use Carbon\Carbon;
+use Illuminate\Support\Arr;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Filters;
+use SrcLab\SupportBot\Repositories\SupportWebimDialogsListSinceParamRepository;
 use SrcLab\SupportBot\Services\Messengers\Messenger;
 use Illuminate\Support\Facades\Log;
 use Exception;
@@ -46,6 +48,15 @@ class Webim implements OnlineConsultant
          */
         if(empty($data['event']) || !in_array($data['event'], ['new_message', 'new_chat'])) {
             return false;
+        }
+
+        /**
+         * TODO: сделано для проверки, удалить при запуске на прод.
+         */
+        if($data['event'] == 'new_chat') {
+            if(strstr($data['visitor']['fields']['name'], 'Тест 4556') === false) {
+                return false;
+            }
         }
 
         /**
@@ -247,6 +258,46 @@ class Webim implements OnlineConsultant
     }
 
     /**
+     * Получение периода диалогов по параметру since.
+     *
+     * @param int $since
+     * @return false|array
+     */
+    public function getPeriodBySince($since = 0)
+    {
+        $result = $this->sendRequest('chats', ['since' => $since]);
+
+        if(empty($result['chats'])) {
+            return false;
+        }
+
+        $period_from = Carbon::parse($result['chats'][0]['created_at']);
+        $period_to = Carbon::parse($result['chats'][0]['created_at']);
+
+        foreach($result['chats'] as $chat) {
+
+            $created_at = Carbon::parse($chat['created_at']);
+
+            if($created_at < $period_from) {
+                $period_from = $created_at;
+            }
+
+            if($created_at > $period_to) {
+                $period_to = $created_at;
+            }
+        }
+
+        return [
+            'periods' => [
+                'from' => $period_from,
+                'to' => $period_to,
+            ],
+            'more_chats_available' => $result['more_chats_available'],
+            'last_ts' => $result['last_ts'],
+        ];
+    }
+
+    /**
      * Получение диалогов со списком сообщений за период.
      *
      * @param array $period
@@ -263,56 +314,38 @@ class Webim implements OnlineConsultant
         $date_start = $period[0] ?? Carbon::now()->startOfDay();
         $date_end = $period[1] ?? Carbon::now();
 
-        $chats = [];
-        $more_chats_available = true;
+        $webim_dialog_list_since_param_repository = app(SupportWebimDialogsListSinceParamRepository::class);
+        $sinces = $webim_dialog_list_since_param_repository->getByPeriod($date_start, $date_end);
 
-        while($more_chats_available) {
-            $result = $this->sendRequest('chats', ['since' => isset($result['last_ts']) ? $result['last_ts'] : 0]);
+        /** @var \Illuminate\Support\Collection $chats */
+        $chats = collect([]);
 
-            $find_chats = false;
-
-            foreach($result['chats'] as $chat) {
-
-                $created_at = Carbon::parse($chat['created_at']);
-                if($created_at >= $date_start && $created_at <= $date_end) {
-                    $chats[] = $chat;
-                    $find_chats = true;
-                }
-            }
-
-            if(!empty($chats) && (!$find_chats && $more_chats_available)) {
-                $more_chats_available = false;
-            }
+        foreach($sinces as $since) {
+            $result = $this->sendRequest('chats', ['since' => $since->since]);
+            $chats = $chats->merge($result['chats']);
         }
+
+        $chats = $chats->unique('id');
 
         /**
          * Фильтрация сообщений по дате в диалоге.
          */
-        foreach($chats as $key=>$chat) {
+
+        $chats = $chats->map(function($chat) use($date_end) {
             $messages = [];
 
             foreach($chat['messages'] as $message) {
-                if (Carbon::parse($message['created_at']) > $date_end) {
-                    break;
-                }
+                $message['created_at'] = Carbon::parse($message['created_at']);
 
-                if (in_array($message['kind'], [
-                        'visitor',
-                        'operator',
-                        'keyboard',
-                        'keyboard_response',
-                        'info'
-                    ]) && Carbon::parse($message['created_at']) >= $date_start) {
+                if ($message['created_at'] <= $date_end) {
                     $messages[] = $message;
                 }
             }
 
-            if(empty($messages)) {
-                unset($chat[$key]);
-            } else {
-                $chat[$key]['messages'] = $messages;
-            }
-        }
+            $chat['messages'] = $messages;
+
+            return $chat;
+        });
 
         return $chats;
     }
@@ -506,6 +539,25 @@ class Webim implements OnlineConsultant
         }
 
         return false;
+    }
+
+    /**
+     * Поиск сообщений оператора и группировка по дате отправку.
+     *
+     * @param array $dialogs
+     * @return \Illuminate\Support\Collection
+     */
+    public function findOperatorMessagesAndGroupBySentAt(array $dialogs)
+    {
+        $messages = array_reduce(Arr::pluck($dialogs, 'messages'), 'array_merge', []);
+
+        $messages = collect($messages);
+
+        $messages = $messages->where('kind', 'operator');
+
+        return $messages->groupBy(function ($value, $key) {
+            return Carbon::parse($value['created_at'])->toDateString();
+        });
     }
 
     //****************************************************************

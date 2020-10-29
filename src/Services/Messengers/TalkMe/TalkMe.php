@@ -32,89 +32,6 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
-     * Обработка новых обращений по вебхуку.
-     *
-     * @param array $data
-     * @throws \Psr\SimpleCache\InvalidArgumentException
-     */
-    public function processWebhook(array $data)
-    {
-        if(!empty($this->config['scripts']['enabled']) && !empty($data['client']['searchId'])) {
-            /**
-             * Планирование отложенного сценария для удержания пользователя.
-             */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['searchId'])) return;
-        }
-
-        /**
-         * Автоответчик.
-         */
-        if($this->autoResponder($data)) {
-            return;
-        }
-
-        /**
-         * Бот отключен.
-         */
-        if(!$this->config['enabled']) {
-            return;
-        }
-
-        /**
-         * Проверка полученных данных, определение возможности сформировать ответ.
-         */
-        if(!$this->checkWebhookData($data)) {
-            return;
-        }
-
-        /**
-         * Проверка периода активности бота.
-         */
-        if(!$this->checkActivePeriod()) {
-            return;
-        }
-
-        /**
-         * Удаление отложенных сообщений, если пользователь написал что-либо после приветствия.
-         */
-        if($this->config['deferred_answer_after_welcome'] ?? false) {
-            $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
-        }
-
-        /**
-         * Формирование автоответа.
-         */
-        [$answer_index, $answer] = $this->getAnswer($data);
-
-        if(empty($answer)) {
-            return;
-        }
-
-        /**
-         * Отправка сообщения.
-         */
-        $this->sendMessage($data['client']['clientId'], $answer, $data['operator']['login']);
-
-        /**
-         * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
-         */
-        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message']['text'])) {
-            $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
-        }
-
-        /**
-         * Увеличение счетчика отправленных сообщений для статистики.
-         */
-        $this->sentMessagesAnalyse();
-
-        /**
-         * Запись информации о том, что ответ уже отправлялся сегодня.
-         */
-        $this->writeJustSentAnswerToday($answer_index, $data['client']['clientId']);
-
-    }
-
-    /**
      * Получение списка сообщений за период.
      *
      * @param array $period
@@ -477,6 +394,25 @@ class TalkMe implements OnlineConsultant
     public function redirectClientToChat($client_id, $operator_id)
     {
         return true;
+    }
+
+    /**
+     * Поиск сообщений оператора и группировка по дате отправку.
+     *
+     * @param array $dialogs
+     * @return \Illuminate\Support\Collection
+     */
+    public function findOperatorMessagesAndGroupBySentAt(array $dialogs)
+    {
+        $messages = array_reduce(Arr::pluck($dialogs, 'messages'), 'array_merge', []);
+
+        $messages = collect($messages);
+
+        $messages = $messages->where('whoSend', 'operator');
+
+        return $messages->groupBy(function ($value, $key) {
+            return Carbon::parse($value['dateTime'])->toDateString();
+        });
     }
 
     //****************************************************************

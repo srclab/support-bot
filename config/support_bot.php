@@ -259,6 +259,7 @@ return [
             'webhook_secret' => env('SRCLAB_SUPPORT_BOT_WEBIM_WEBHOOK_SECRET', ''),
             'bot_operator_name' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_OPERATOR_NAME', ''),
             'bot_operator_id' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_OPERATOR_ID', ''),
+            'dialog_list_since_param_table_name' => 'support_webim_dialogs_list_since_param',
         ],
 
     ],

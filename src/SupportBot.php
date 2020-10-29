@@ -99,7 +99,7 @@ class SupportBot
                                 $this->support_bot_scripts->planningPendingScripts($search_id);
                             }
 
-                            $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->subDays(2), Carbon::now()->endOfDay()]);
+                            $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->subDays(2), Carbon::now()->endOfDay()]);
 
                             if ($this->online_consultant->isClientRedirectedToBot($dialog)) {
                                 return true;
@@ -247,13 +247,11 @@ class SupportBot
          */
         $cache_days = $cache_days > 14 ? 14 : $cache_days;
 
-        $filter = [
-            'period' => [now()->subDays($cache_days-1)->startOfDay(), Carbon::now()->endOfDay()],
-        ];
+        $period = [now()->subDays($cache_days-1)->startOfDay(), Carbon::now()->endOfDay()];
 
-        $messages = $this->online_consultant->getDialogsByPeriod($filter);
+        $dialogs = $this->online_consultant->getDialogsByPeriod($period);
 
-        if(empty($messages)) {
+        if(empty($dialogs)) {
             Log::error('[SrcLab\SupportBot] Не удалось получить сообщения для составления статистики отпраки.');
             return [];
         }
@@ -261,15 +259,7 @@ class SupportBot
         /**
          * Подсчет и добавление общего количества сообщений от менеджеров по дням.
          */
-        $messages = array_reduce(Arr::pluck($messages, 'messages'), 'array_merge', []);
-
-        $messages = collect($messages);
-
-        $messages = $messages->where('whoSend', 'operator');
-
-        $messages_by_days = $messages->groupBy(function ($value, $key) {
-            return Carbon::parse($value['dateTime'])->toDateString();
-        });
+        $messages_by_days = $this->online_consultant->findOperatorMessagesAndGroupBySentAt($dialogs);
 
         $result_data = [];
 
@@ -418,7 +408,7 @@ class SupportBot
          * Получение сообщений за сегодняшний день и поиск приветствия с нашей стороны.
          */
         $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->startOfDay(), Carbon::now()->endOfDay()]);
-        $today_operator_messages = $this->online_consultant->findOperatorMessages($dialog);
+        $today_operator_messages = $this->online_consultant->findOperatorMessages($this->online_consultant->getParamFromDialog('messages', $dialog));
 
         if(empty($today_operator_messages)) {
             $this->cache->set($cache_key, 1, now()->endOfDay());
