@@ -347,7 +347,7 @@ class Webim implements OnlineConsultant
             return $chat;
         });
 
-        return $chats;
+        return $chats->toArray();
     }
 
     /**
