@@ -6,6 +6,7 @@ use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\SupportBot\SupportBot;
 
 class TalkMe implements OnlineConsultant
 {
@@ -55,7 +56,7 @@ class TalkMe implements OnlineConsultant
                 'stop' => $date_end->toDateString(),
             ];
 
-            $messages = $this->sendRequest('message', []);
+            $messages = $this->sendRequest('message', $data);
 
             return $messages === false ? [] : $messages;
 
@@ -70,7 +71,7 @@ class TalkMe implements OnlineConsultant
                     'stop' => $date_end->toDateString(),
                 ];
 
-                $result = $this->sendRequest('message', []);
+                $result = $this->sendRequest('message', $data);
 
                 if($result === false) break;
 
@@ -119,7 +120,7 @@ class TalkMe implements OnlineConsultant
      * @param string $operator
      * @return bool
      */
-    public function sendButtonsMessage($client_id, $button_names, $operator = null)
+    public function sendButtonsMessage($client_id, array $button_names, $operator = null)
     {
         /**
          * Формирование сообщения с вариантами ответа из за отсуствия кнопок.
@@ -248,13 +249,14 @@ class TalkMe implements OnlineConsultant
         switch($param) {
             case 'name':
                 return $dialog['name'] ?? null;
-                break;
             case 'messages':
                 return $dialog['messages'];
-                break;
-            case 'clientId':
+            case 'client_id':
                 return $dialog['clientId'];
-                break;
+            case 'search_id':
+                return $dialog['searchId'];
+            case 'operator_id':
+                return array_pop($dialog['operators'])['login'];
             default:
                 throw new Exception('Неизвестная переменная для получения из данных диалога.');
         }
@@ -387,13 +389,26 @@ class TalkMe implements OnlineConsultant
     /**
      * Перевод чата на оператора.
      *
-     * @param int $client_id
-     * @param int $operator_id
+     * @param array $dialog
+     * @param mixed $to_operator
      * @return bool
      */
-    public function redirectClientToChat($client_id, $operator_id)
+    public function redirectDialogToOperator(array $dialog, $to_operator)
     {
-        return true;
+        $data =[
+            'client' => [
+                'searchId' => $this->getParamFromDialog('search_id', $dialog),
+                'clientId' => $this->getParamFromDialog('client_id', $dialog),
+            ],
+            'from' => [
+                'login' => $to_operator
+            ],
+            'to' => [
+                'login' => $this->getParamFromDialog('operator_id', $dialog),
+            ],
+        ];
+
+        return (bool) $this->sendRequest('message/forward', $data);
     }
 
     /**
@@ -442,6 +457,7 @@ class TalkMe implements OnlineConsultant
             ],
             'token' => [
                 'operators/getList',
+                'message/forward',
             ],
         ];
 
@@ -460,7 +476,7 @@ class TalkMe implements OnlineConsultant
         } elseif(in_array($api_method, $autorization_methods['token'])) {
 
             curl_setopt_array($ch, [
-                CURLOPT_URL => "https://lcab.talk-me.ru/json/v1.0/chat/operator/getList",
+                CURLOPT_URL => "https://lcab.talk-me.ru/json/v1.0/chat/{$api_method}",
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => $data,
                 CURLOPT_RETURNTRANSFER => 1,

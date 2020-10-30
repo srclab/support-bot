@@ -8,11 +8,13 @@ use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
+use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
 use Throwable;
 
 class SupportBot
-
 {
+    use SupportBotStatistic;
+    
     /**
      * @var \SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository
      */
@@ -170,7 +172,7 @@ class SupportBot
         /**
          * Отправка сообщения.
          */
-        $this->sendMessage($client_id, $answer, $this->online_consultant->getParamFromDataWebhook('operator_login', $data));
+        $this->sendOrPlaningMessage($client_id, $answer, $this->online_consultant->getParamFromDataWebhook('operator_login', $data));
 
         /**
          * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
@@ -178,11 +180,6 @@ class SupportBot
         if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $this->online_consultant->getParamFromDataWebhook('message_text', $data))) {
             $this->messages_repository->addRecord($client_id, $this->online_consultant->getParamFromDataWebhook('operator_login', $data), 'Чем я могу вам помочь?', now()->addMinutes(2));
         }
-
-        /**
-         * Увеличение счетчика отправленных сообщений для статистики.
-         */
-        $this->sentMessagesAnalyse();
 
         /**
          * Запись информации о том, что ответ уже отправлялся сегодня.
@@ -219,7 +216,7 @@ class SupportBot
          * Отправка сообщений.
          */
         foreach ($messages as $message) {
-            $this->online_consultant->sendMessage($message->client_id, $message->message, $message->operator);
+            $this->sendMessageAndIncrementStatistic($message->client_id, $message->message, $message->operator);
         }
     }
 
@@ -430,70 +427,16 @@ class SupportBot
     }
 
     /**
-     * Увеличение счетчика отправленных сообщений для статистики.
-     */
-    protected function sentMessagesAnalyse()
-    {
-        try {
-
-            /**
-             * Анализ сообщений отключен.
-             */
-            if (!$this->config['sent_messages_analyse']['enabled']) {
-                return;
-            }
-
-            /**
-             * Получение данных из кеша.
-             */
-            $cache_key = 'SupportBot:SentMessagesByDays';
-            $cache_days = $this->config['sent_messages_analyse']['cache_days'];
-
-            $data = $this->cache->get($cache_key, []);
-
-            /**
-             * Проход по дням, удаление старой информации.
-             */
-            if (!empty($data)) {
-
-                $date_border = now()->subDays($cache_days)->toDateString();
-
-                foreach ($data as $date => $count) {
-                    if ($date < $date_border) {
-                        unset($data[$date]);
-                    }
-                }
-
-            }
-
-            /**
-             * Инкремент счетчика текущего дня.
-             */
-            $current_date = now()->toDateString();
-
-            $data[$current_date] = ($data[$current_date] ?? 0) + 1;
-
-            /**
-             * Сохранение данных.
-             */
-            $this->cache->set($cache_key, $data, now()->addDays($cache_days));
-
-        } catch (Throwable $e) {
-            Log::error('[SrcLab\SupportBot] Ошибка анализатора отправленных сообщений');
-        }
-    }
-
-    /**
      * Добавление ответа в очередь на отправку или мгновенная отправка на основании текущего режима работы.
      *
      * @param int $client_id
      * @param string $message
      * @param string $operator
      */
-    protected function sendMessage($client_id, $message, $operator)
+    protected function sendOrPlaningMessage($client_id, $message, $operator)
     {
         if($this->config['answering_mode'] == 'sync') {
-            $this->online_consultant->sendMessage($client_id, $message, $operator);
+            $this->sendMessageAndIncrementStatistic($client_id, $message, $operator);
         } else {
             $this->messages_repository->addRecord($client_id, $operator, $message);
         }
@@ -559,7 +502,7 @@ class SupportBot
          */
         $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'Offline' ? null : $data['operator']['login'];
 
-        $this->sendMessage($client_id, $auto_responder_config['message'], $operator);
+        $this->sendOrPlaningMessage($client_id, $auto_responder_config['message'], $operator);
 
         /**
          * Отложенный редирект пользователя в рабочее время.

@@ -10,6 +10,7 @@ use SrcLab\SupportBot\Repositories\SupportWebimDialogsListSinceParamRepository;
 use SrcLab\SupportBot\Services\Messengers\Messenger;
 use Illuminate\Support\Facades\Log;
 use Exception;
+use SrcLab\SupportBot\SupportBot;
 
 class Webim implements OnlineConsultant
 {
@@ -101,7 +102,7 @@ class Webim implements OnlineConsultant
             ],
         ];
 
-        return (bool) $this->sendRequest('send_message', $data);
+        return $this->sendRequest('send_message', $data);
     }
 
     /**
@@ -112,7 +113,7 @@ class Webim implements OnlineConsultant
      * @param string $operator
      * @return bool
      */
-    public function sendButtonsMessage($client_id, $button_names, $operator = null)
+    public function sendButtonsMessage($client_id, array $button_names, $operator = null)
     {
         /**
          * Формирование кнопок.
@@ -207,13 +208,14 @@ class Webim implements OnlineConsultant
         switch($param) {
             case 'name':
                 return $dialog['visitor']['fields']['name'] ?? null;
-                break;
             case 'messages':
                 return $dialog['messages'];
-                break;
-            case 'clientId':
+            case 'client_id':
                 return $dialog['id'];
-                break;
+            case 'search_id':
+                return $dialog['id'];
+            case 'operator_id':
+                return $dialog['operator_id'];
             default:
                 throw new Exception('Неизвестная переменная для получения из данных диалога.');
         }
@@ -476,15 +478,15 @@ class Webim implements OnlineConsultant
     /**
      * Перевод чата на оператора.
      *
-     * @param int $client_id
-     * @param int $operator_id
+     * @param array $dialog
+     * @param mixed $to_operator
      * @return bool
      */
-    public function redirectClientToChat($client_id, $operator_id)
+    public function redirectDialogToOperator(array $dialog, $to_operator)
     {
         $data = [
-            'chat_id' => $client_id,
-            'operator_id' => $operator_id,
+            'chat_id' => $dialog['id'],
+            'operator_id' => $to_operator,
         ];
 
         return (bool) $this->sendRequest('redirect_chat', $data);

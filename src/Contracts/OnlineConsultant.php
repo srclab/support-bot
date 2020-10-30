@@ -127,9 +127,9 @@ interface OnlineConsultant
     /**
      * Перевод чата на оператора.
      *
-     * @param int $client_id
-     * @param int $operator_id
+     * @param array $dialog
+     * @param mixed $to_operator
      * @return bool
      */
-    public function redirectClientToChat($client_id, $operator_id);
+    public function redirectDialogToOperator(array $dialog, $to_operator);
 }

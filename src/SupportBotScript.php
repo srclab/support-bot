@@ -7,10 +7,13 @@ use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
+use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
 
 /** TODO: предусмотреть вариант что dialogId записанный в базе данных будет неактивным ( несуществует ) */
 class SupportBotScript
 {
+    use SupportBotStatistic;
+
     /**
      * @var \Illuminate\Config\Repository|mixed
      */
@@ -37,6 +40,11 @@ class SupportBotScript
     protected $redirect_chat_repository;
 
     /**
+     * @var \SrcLab\SupportBot\SupportBot
+     */
+    protected $support_bot;
+
+    /**
      * SupportBotScripts constructor.
      */
     public function __construct()
@@ -46,6 +54,7 @@ class SupportBotScript
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
         $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
+        $this->support_bot = app(SupportBot::class);
     }
 
     /**
@@ -164,24 +173,38 @@ class SupportBotScript
 
                             if(!empty($this->config['redirect_chats']['working_hours']['period_begin']) && !empty($this->config['redirect_chats']['working_hours']['period_end']) && !check_current_time($this->config['redirect_chats']['working_hours']['period_begin'], $this->config['redirect_chats']['working_hours']['period_end'])) {
 
-                                $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
+                                $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
-                                $this->online_consultant->sendMessage($client_id, $this->config['redirect_chats']['message_not_working_hours']);
+                                $this->sendMessageAndIncrementStatistic($client_id, $this->config['redirect_chats']['message_not_working_hours']);
 
                                 $this->redirect_chat_repository->addRecord($client_id);
 
                             } else {
                                 $operators_ids = $this->online_consultant->getListOnlineOperatorsIds();
 
+                                $operator_id = $this->online_consultant->getParamFromDialog('operator_id', $dialog);
+
+                                /**
+                                 * Удаление текущего оператора со списка операторов.
+                                 */
+                                $operators_ids = array_diff($operators_ids, [$operator_id]);
+
+                                /**
+                                 * Получение разрешенных операторов.
+                                 */
+                                if(!empty($this->config['redirect_chats']['except_operators_ids'])) {
+                                    $operators_ids = array_diff($operators_ids, $this->config['redirect_chats']['except_operators_ids']);
+                                }
+
                                 if(empty($operators_ids)) {
 
-                                    $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
+                                    $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
-                                    $this->online_consultant->sendMessage($this->online_consultant->getParamFromDialog('clientId', $dialog), $this->config['redirect_chats']['message_not_operators']);
+                                    $this->sendMessageAndIncrementStatistic($this->online_consultant->getParamFromDialog('client_id', $dialog), $this->config['redirect_chats']['message_not_operators']);
 
                                     $this->redirect_chat_repository->addRecord($client_id);
                                 } else {
-                                    $this->online_consultant->redirectClientToChat($script->search_id, $operators_ids[array_rand($operators_ids)]);
+                                    $this->online_consultant->redirectDialogToOperator($dialog, $operators_ids[array_rand($operators_ids)]);
                                 }
                             }
 
@@ -235,17 +258,17 @@ class SupportBotScript
                 $script->save();
             }
 
-            $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
+            $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
             /**
              * Отправка сообщений пользователю.
              */
             foreach($result as $message) {
-                $this->online_consultant->sendMessage($client_id, $this->replaceMultipleSpacesWithLineBreaks($message));
+                $this->sendMessageAndIncrementStatistic($client_id, $this->replaceMultipleSpacesWithLineBreaks($message));
             }
 
             if(!empty($buttons)) {
-                $this->online_consultant->sendButtonsMessage($client_id, $buttons);
+                $this->sendButtonMessageAndIncrementStatistic($client_id, $buttons);
             }
 
             /**
@@ -331,10 +354,10 @@ class SupportBotScript
         if ($this->checkDialogScriptLaunchConditions($messages)) {
             $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
             $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
-            $client_id = $this->online_consultant->getParamFromDialog('clientId', $dialog);
+            $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
-            $this->online_consultant->sendMessage($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
-            $this->online_consultant->sendButtonsMessage($client_id, $buttons);
+            $this->sendMessageAndIncrementStatistic($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+            $this->sendButtonMessageAndIncrementStatistic($client_id, $buttons);
 
             $script->step++;
             $script->prev_step = 0;

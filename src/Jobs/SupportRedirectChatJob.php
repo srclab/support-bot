@@ -38,24 +38,37 @@ class SupportRedirectChatJob implements ShouldQueue
 
         $operators_ids = $online_consultant->getListOnlineOperatorsIds();
 
+        /**
+         * Получение разрешенных операторов.
+         */
+        if(!empty($config['redirect_chats']['except_operators_ids'])) {
+            $operators_ids = array_diff($operators_ids, $config['redirect_chats']['except_operators_ids']);
+        }
+
         if(!empty($operators_ids)) {
             $redirects = $support_redirect_chat_repository->getNextPart();
 
             /** @var \SrcLab\SupportBot\Models\SupportRedirectChatModel $redirect */
             foreach($redirects as $redirect) {
 
+                $dialog = $online_consultant->getDialogFromClientByPeriod($redirect->client_id);
+                $operator_id = $online_consultant->getParamFromDialog('operator_id', $dialog);
+
                 /**
                  * Проверка находится ли диалог на боте Webim.
                  */
                 if($config['online_consultant'] == 'webim') {
-                    $dialog = $online_consultant->getDialogFromClientByPeriod($redirect->client_id);
-
                     if($dialog['operator_id'] != $config['accounts']['webim']['bot_operator_id']) {
+                        continue;
+                    }
+                } elseif($config['online_consultant'] == 'talkme') {
+                    if(in_array($operator_id, $operators_ids)) {
+                        $redirect->delete();
                         continue;
                     }
                 }
 
-                $online_consultant->redirectClientToChat($redirect->client_id, $operators_ids[array_rand($operators_ids)]);
+                $online_consultant->redirectDialogToOperator($dialog, $operators_ids[array_rand($operators_ids)]);
 
                 $redirect->delete();
             }
