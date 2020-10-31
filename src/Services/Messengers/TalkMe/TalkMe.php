@@ -7,6 +7,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\SupportBot;
+use Exception;
 
 class TalkMe implements OnlineConsultant
 {
@@ -125,10 +126,10 @@ class TalkMe implements OnlineConsultant
         /**
          * Формирование сообщения с вариантами ответа из за отсуствия кнопок.
          */
-        $message = 'Пожалуйста выберите и напишите один из вариантов ответа:\n';
+        $message = "Пожалуйста выберите и напишите один из вариантов ответа:\n";
 
         foreach($button_names as $key=>$button_name) {
-            $message .=  "{$key}.{$button_name}\n";
+            $message .=  "* {$button_name}\n";
         }
 
         /**
@@ -228,10 +229,10 @@ class TalkMe implements OnlineConsultant
                 return $data['client']['searchId'] ?? null;
             case 'message_text':
                 return $data['message']['text'] ?? null;
-            case 'operator_login':
-                return $data['operator']['login'] ?? null;
             case 'messages':
                 return null;
+            case 'operator_login':
+                return $data['operator']['login'] ?? null;
             default:
                 throw new Exception('Неизвестная переменная для получения из данных webhook.');
         }
@@ -294,7 +295,7 @@ class TalkMe implements OnlineConsultant
          * TODO: вернуть break; после проверки.
          */
         foreach ($messages as $key => $message) {
-            if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message['text']))) {
+            if (preg_match('/' . $select_message . '/iu', $this->deleteControlCharactersAndSpaces($message))) {
                 $message_id = $key;
                 //break;
             }
@@ -305,7 +306,6 @@ class TalkMe implements OnlineConsultant
 
     /**
      * Поиск сообщений оператора.
-     * TODO: проверить метод ( добавил messageType ).
      *
      * @param array $messages
      * @return array
@@ -315,8 +315,8 @@ class TalkMe implements OnlineConsultant
         $operator_messages = [];
 
         foreach ($messages as $key=>$message) {
-            if ($message['whoSend'] == 'operator' && (empty($messages[$i]['messageType']) || !empty($messages[$i]['messageType']) && ($messages[$i]['messageType'] != 'comment' && $messages[$i]['messageType'] != 'autoMessage'))) {
-                $operator_messages[$key] = $message['message'];
+            if ($message['whoSend'] == 'operator' && (empty($message['messageType']) || !empty($message['messageType']) && ($message['messageType'] != 'comment' && $message['messageType'] != 'autoMessage'))) {
+                $operator_messages[$key] = $message['text'];
             }
         }
 
@@ -335,7 +335,7 @@ class TalkMe implements OnlineConsultant
 
         foreach ($messages as $key=>$message) {
             if ($message['whoSend'] == 'client') {
-                $client_message[$key] = $message['message'];
+                $client_message[$key] = $message['text'];
             }
         }
 
@@ -367,19 +367,18 @@ class TalkMe implements OnlineConsultant
 
     /**
      * Получение списка ид операторов онлайн.
-     * TODO: реализовать метод.
      *
      * @return array
      */
     public function getListOnlineOperatorsIds()
     {
-        $result = $this->sendRequest('operators/getList');
+        $result = $this->sendRequest('operator/getList');
 
         $online_operators_ids = [];
 
         foreach($result['operators'] as $operator) {
             if($operator['statusId'] == 1) {
-                $online_operators_ids[] = $operator['id'];
+                $online_operators_ids[] = $operator['login'];
             }
         }
 
@@ -401,10 +400,10 @@ class TalkMe implements OnlineConsultant
                 'clientId' => $this->getParamFromDialog('client_id', $dialog),
             ],
             'from' => [
-                'login' => $to_operator
+                'login' => $this->getParamFromDialog('operator_id', $dialog),
             ],
             'to' => [
-                'login' => $this->getParamFromDialog('operator_id', $dialog),
+                'login' => $to_operator
             ],
         ];
 
@@ -456,7 +455,7 @@ class TalkMe implements OnlineConsultant
                 'messageToClient',
             ],
             'token' => [
-                'operators/getList',
+                'operator/getList',
                 'message/forward',
             ],
         ];

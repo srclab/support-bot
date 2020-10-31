@@ -40,9 +40,9 @@ class SupportBotScript
     protected $redirect_chat_repository;
 
     /**
-     * @var \SrcLab\SupportBot\SupportBot
+     * @var \Illuminate\Contracts\Cache\Repository $cache
      */
-    protected $support_bot;
+    protected $cache;
 
     /**
      * SupportBotScripts constructor.
@@ -54,7 +54,7 @@ class SupportBotScript
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
         $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
-        $this->support_bot = app(SupportBot::class);
+        $this->cache = app('cache');
     }
 
     /**
@@ -144,9 +144,11 @@ class SupportBotScript
             /**
              * Получение сообщений клиента полученных после последнего сообщения сценария.
              */
-            $client_messages = implode('', $this->getClientMessageAfterLastScriptMessage($script, $messages));
+            $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
 
             if (!empty($client_messages)) {
+
+                $client_messages = implode('', $this->getClientMessageAfterLastScriptMessage($script, $messages));
 
                 /**
                  * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
@@ -166,10 +168,6 @@ class SupportBotScript
                              */
                             $script->step = -1;
                             $script->save();
-
-                            /**
-                             * TODO: предусмотреть что операторов в сети не будет, тогда выводить сообщение что все операторы не в сети и ответят в 9 часов ( отложенно перекидывать утром ).
-                             */
 
                             if(!empty($this->config['redirect_chats']['working_hours']['period_begin']) && !empty($this->config['redirect_chats']['working_hours']['period_end']) && !check_current_time($this->config['redirect_chats']['working_hours']['period_begin'], $this->config['redirect_chats']['working_hours']['period_end'])) {
 
@@ -363,13 +361,12 @@ class SupportBotScript
             $script->prev_step = 0;
             $script->start_script_at = Carbon::now();
             $script->save();
-
         } elseif($this->config['online_consultant'] == 'webim') {
 
             $this->online_consultant->closeChat($script->search_id);
             $script->delete();
         } else {
-            
+
             $script->delete();
         }
     }
@@ -452,13 +449,9 @@ class SupportBotScript
 
         $client_messages = [];
 
-        /**
-         * TODO: проверить работу функции.
-         */
-
         if (!empty($script_message_id)) {
 
-            $messages = array_slice($messages, ($script_message_id + ($this->config['online_consultant'] == 'webim' ? 2 : 1)));
+            $messages = array_slice($messages, ($script_message_id + 2));
 
             /**
              * Удаление скрипта в случае если диалог подхватил реальный оператор.

@@ -4,7 +4,6 @@ namespace SrcLab\SupportBot;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
-use Illuminate\Support\Facades\Log;
 
 class SupportBotController extends BaseController
 {
@@ -33,11 +32,6 @@ class SupportBotController extends BaseController
         $config = array_merge(config('support_bot'), app_config('support_bot'));
 
         $post_data = $this->request->getContent();
-
-        /**
-         * TODO: удалить после проверки.
-         */
-        Log::debug('Данные вебхук: ', ['post_data' => $post_data]);
 
         if (!empty($post_data)) {
             $post_data = json_decode($post_data, true);

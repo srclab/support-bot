@@ -290,7 +290,7 @@ class SupportBot
         $answers = $this->config['auto_answers'];
 
         /**
-         * TODO: сделать условие если последнее сообщение от оператора не отвечать.
+         * TODO: сделать условие если последнее сообщение от оператора не отвечать ( для Webim ).
          */
         $message = $this->online_consultant->getParamFromDataWebhook('message_text', $data);
         $result_answer = '';
@@ -388,7 +388,7 @@ class SupportBot
      * @return bool
      * @throws \Psr\SimpleCache\InvalidArgumentException
      */
-    public function alreadySaidHello(array $data)
+    protected function alreadySaidHello(array $data)
     {
         $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
 
@@ -431,9 +431,9 @@ class SupportBot
      *
      * @param int $client_id
      * @param string $message
-     * @param string $operator
+     * @param null|string $operator
      */
-    protected function sendOrPlaningMessage($client_id, $message, $operator)
+    protected function sendOrPlaningMessage($client_id, $message, $operator = null)
     {
         if($this->config['answering_mode'] == 'sync') {
             $this->sendMessageAndIncrementStatistic($client_id, $message, $operator);

@@ -149,16 +149,8 @@ class Webim implements OnlineConsultant
      */
     public function getParamFromDataWebhook($param, array $data)
     {
-        /**
-         * TODO: объединить client_id, search_id в одну структуру
-         */
         switch($param) {
             case 'client_id':
-                if($data['event'] == 'new_chat') {
-                    return $data['chat']['id'] ?? null;
-                } else {
-                    return $data['chat_id'] ?? null;
-                }
             case 'search_id':
                 if($data['event'] == 'new_chat') {
                     return $data['chat']['id'] ?? null;
@@ -211,7 +203,6 @@ class Webim implements OnlineConsultant
             case 'messages':
                 return $dialog['messages'];
             case 'client_id':
-                return $dialog['id'];
             case 'search_id':
                 return $dialog['id'];
             case 'operator_id':
