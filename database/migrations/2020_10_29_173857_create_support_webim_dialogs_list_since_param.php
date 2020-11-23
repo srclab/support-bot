@@ -31,8 +31,8 @@ class CreateSupportWebimDialogsListSinceParam extends Migration
                 $table->increments('id');
                 $table->dateTime('period_from');
                 $table->dateTime('period_to');
-                $table->integer('since');
-                $table->integer('last_ts');
+                $table->bigInteger('since');
+                $table->bigInteger('last_ts');
             });
         }
     }

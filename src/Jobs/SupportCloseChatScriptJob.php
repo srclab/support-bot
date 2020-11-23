@@ -8,8 +8,8 @@ use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use SrcLab\SupportBot\Contracts\OnlineConsultant;
-use SrcLab\SupportBot\SupportBotScript;
 use Carbon\Carbon;
+use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 
 class SupportCloseChatScriptJob implements ShouldQueue
 {
@@ -29,7 +29,7 @@ class SupportCloseChatScriptJob implements ShouldQueue
      */
     public function handle()
     {
-        $script_repository = app(SupportBotScript::class);
+        $script_repository = app(SupportScriptRepository::class);
         $online_consultant = app(OnlineConsultant::class);
         $unanswered_scripts = $script_repository->getNextUnansweredScripts();
         $config = array_merge(config('support_bot'), app_config('support_bot'));
@@ -47,9 +47,11 @@ class SupportCloseChatScriptJob implements ShouldQueue
             } else {
                 /**
                  * Обнуление сценария в случае если диалог подхватил оператор.
+                 *
+                 * TODO: поставить 3 часа после проверки
                  */
                 $unanswered_script->step = 0;
-                $unanswered_script->send_message_at = Carbon::now()->addHours(3);
+                $unanswered_script->send_message_at = Carbon::now()->addMinute(10);
                 $unanswered_script->user_answered = false;
                 $unanswered_script->start_script_at = null;
 

@@ -42,10 +42,13 @@ class SupportScriptRepository extends Repository
      */
     public function getNextUnansweredScripts()
     {
+        /**
+         * TODO: после проверки для карбона установить Carbon::now()->subDays(1)
+         */
         return $this->query()
             ->where([
                 ['user_answered', false],
-                ['start_script_at', '<', Carbon::now()->subDays(1)],
+                ['start_script_at', '<', Carbon::now()->subMinute(30)],
             ])
             ->get();
     }

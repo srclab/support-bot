@@ -165,11 +165,14 @@ class SupportBotScript
                         if(!empty($variant['for_operator'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
+                             *
+                             * TODO: убрать удаление и раскоментировать данные код после проверки.
                              */
-                            $script->step = -1;
-                            $script->save();
+                            /*$script->step = -1;
+                            $script->save();*/
+                            $script->delete();
 
-                            if(!empty($this->config['redirect_chats']['working_hours']['period_begin']) && !empty($this->config['redirect_chats']['working_hours']['period_end']) && !check_current_time($this->config['redirect_chats']['working_hours']['period_begin'], $this->config['redirect_chats']['working_hours']['period_end'])) {
+                            if(!empty($this->config['redirect_chats']['not_working_hours']['period_begin']) && !empty($this->config['redirect_chats']['not_working_hours']['period_end']) && check_current_time($this->config['redirect_chats']['not_working_hours']['period_begin'], $this->config['redirect_chats']['not_working_hours']['period_end'])) {
 
                                 $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
@@ -211,9 +214,11 @@ class SupportBotScript
                         } elseif (!empty($variant['is_final'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
+                             * TODO: убрать удаление и раскоментировать данные код после проверки.
                              */
-                            $script->step = -1;
-                            $script->save();
+                            /*$script->step = -1;
+                            $script->save();*/
+                            $script->delete();
 
                         } elseif (!empty($variant['next_step'])) {
                             /**
@@ -332,19 +337,19 @@ class SupportBotScript
         }
 
         /**
-         * TODO: раскоментировать после проверки.
+         * TODO: поставить 2:59 минут после проверки.
          */
         /**
          * Проверка времени последнего сообщения клиента.
          */
-        /*$datetime_message_client = $this->online_consultant->getDateTimeClientLastMessage($dialog);*/
+        $datetime_message_client = $this->online_consultant->getDateTimeLastMessage($dialog);
 
         /** @var \Carbon\Carbon $datetime_message_client */
-        /*if(!empty($datetime_message_client) && $datetime_message_client->diffInHours(Carbon::now()) < 3) {
-            $script->send_message_at = $datetime_message_client->addHour(3);
+        if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < 1) {
+            $script->send_message_at = $datetime_message_client->addMinute(1);
             $script->save();
             return;
-        }*/
+        }
 
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
@@ -478,9 +483,11 @@ class SupportBotScript
     {
         /**
          * Установка несуществующего шага для завершения скрипта.
+         * TODO: убрать удаление и раскоментировать данные код после проверки.
          */
-        $script->step = -1;
-        $script->save();
+        /*$script->step = -1;
+        $script->save();*/
+        $script->delete();
 
         return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['messages'];
     }

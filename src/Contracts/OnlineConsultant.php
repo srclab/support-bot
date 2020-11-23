@@ -77,12 +77,12 @@ interface OnlineConsultant
     public function getParamFromDialog($param, array $dialog);
 
     /**
-     * Получение даты и времени последнего сообщения клиента.
+     * Получение даты и времени последнего сообщения клиента или оператора в диалоге.
      *
      * @param array $dialog
-     * @return \Carbon\Carbon|false
+     * @return \Carbon\Carbon
      */
-    public function getDateTimeClientLastMessage($dialog);
+    public function getDateTimeLastMessage($dialog);
 
     /**
      * Поиск сообщений оператора.

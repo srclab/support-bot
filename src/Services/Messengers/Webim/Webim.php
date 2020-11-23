@@ -55,9 +55,10 @@ class Webim implements OnlineConsultant
          * TODO: сделано для проверки, удалить при запуске на прод.
          */
         if($data['event'] == 'new_chat') {
-            if(strstr($data['visitor']['fields']['name'], 'Тест 4556') === false) {
+            if(strstr($data['visitor']['fields']['name'], 'Test4556') === false) {
                 return false;
             }
+            Log::debug('Данные вебхук подходят для теста: ', $data);
         }
 
         /**
@@ -310,6 +311,7 @@ class Webim implements OnlineConsultant
         $webim_dialog_list_since_param_repository = app(SupportWebimDialogsListSinceParamRepository::class);
         $sinces = $webim_dialog_list_since_param_repository->getByPeriod($date_start, $date_end);
 
+
         /** @var \Illuminate\Support\Collection $chats */
         $chats = collect([]);
 
@@ -424,23 +426,19 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     * Получение даты и времени последнего сообщения клиента.
+     * Получение даты и времени последнего сообщения клиента или оператора в диалоге.
      *
      * @param array $dialog
-     * @return \Carbon\Carbon|false
+     * @return \Carbon\Carbon
      */
-    public function getDateTimeClientLastMessage($dialog)
+    public function getDateTimeLastMessage($dialog)
     {
         $i = count($dialog['messages'])-1;
         $message = $dialog['messages'][$i];
 
-        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
+        while($i >= 0 && !in_array($dialog['messages'][$i]['kind'], ['visitor', 'file_visitor', 'keyboard_response', 'operator'])) {
             $message = $dialog['messages'][$i];
             $i--;
-        }
-
-        if(!in_array($message['kind'], ['visitor', 'file_visitor', 'keyboard_response'])) {
-            return false;
         }
 
         return Carbon::parse($message['created_at']);

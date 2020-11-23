@@ -343,23 +343,26 @@ class TalkMe implements OnlineConsultant
     }
 
     /**
-     * Получение даты и времени последнего сообщения клиента.
+     * Получение даты и времени последнего сообщения клиента или оператора в диалоге.
      *
      * @param array $dialog
-     * @return \Carbon\Carbon|false
+     * @return \Carbon\Carbon
      */
-    public function getDateTimeClientLastMessage($dialog)
+    public function getDateTimeLastMessage($dialog)
     {
         $i = count($dialog['messages'])-1;
         $message = $dialog['messages'][$i];
 
-        while($i >= 0 && $dialog['messages'][$i]['whoSend'] != 'client') {
+        while($i >= 0
+            && $dialog['messages'][$i]['whoSend'] != 'client'
+                && ($dialog['messages'][$i]['whoSend'] != 'operator'
+                    || $dialog['messages'][$i]['whoSend'] == 'operator'
+                    && !empty($message['messageType'])
+                        && ($message['messageType'] != 'comment'
+                            && $message['messageType'] != 'autoMessage'))
+        ) {
             $message = $dialog['messages'][$i];
             $i--;
-        }
-
-        if($message['whoSend'] != 'client') {
-            return false;
         }
 
         return Carbon::parse($message['dateTime']);
