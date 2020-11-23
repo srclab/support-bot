@@ -252,42 +252,45 @@ class Webim implements OnlineConsultant
     }
 
     /**
-     * Получение периода диалогов по параметру since.
+     * Получение диалогов за период.
      *
-     * @param int $since
-     * @return false|array
+     * @param $since
+     * @return array|bool
+     * @throws \Exception
      */
-    public function getPeriodBySince($since = 0)
+    public function getDialogsBySince($since)
     {
-        $result = $this->sendRequest('chats', ['since' => $since]);
+        return $this->sendRequest('chats', ['since' => $since]);
+    }
 
-        if(empty($result['chats'])) {
-            return false;
-        }
+    /**
+     * Получение периода среди диалогов ( самый новый и самый старый диалог ).
+     *
+     * @param array $dialogs
+     * @return array
+     */
+    public function getPeriodByDialogs($dialogs)
+    {
+        $period_from = Carbon::parse($dialogs[0]['created_at']);
+        $period_to = Carbon::parse($dialogs[0]['created_at']);
 
-        $period_from = Carbon::parse($result['chats'][0]['created_at']);
-        $period_to = Carbon::parse($result['chats'][0]['created_at']);
-
-        foreach($result['chats'] as $chat) {
+        foreach($dialogs as $chat) {
 
             $created_at = Carbon::parse($chat['created_at']);
+            $last_message_at = Carbon::parse(array_pop($chat['messages'])['created_at']);
 
             if($created_at < $period_from) {
                 $period_from = $created_at;
             }
 
-            if($created_at > $period_to) {
-                $period_to = $created_at;
+            if($last_message_at > $period_to) {
+                $period_to = $last_message_at;
             }
         }
 
         return [
-            'periods' => [
-                'from' => $period_from,
-                'to' => $period_to,
-            ],
-            'more_chats_available' => $result['more_chats_available'],
-            'last_ts' => $result['last_ts'],
+            'from' => $period_from,
+            'to' => $period_to,
         ];
     }
 
@@ -302,22 +305,34 @@ class Webim implements OnlineConsultant
         /**
          * Фомирование временных рамок в нужном формате.
          *
+         * @var \Carbon\Carbon $now
          * @var \Carbon\Carbon $date_start
          * @var \Carbon\Carbon $date_end
          */
-        $date_start = $period[0] ?? Carbon::now()->startOfDay();
-        $date_end = $period[1] ?? Carbon::now();
+        $now = Carbon::now();
+        $date_start = $period[0] ?? $now->startOfDay();
+        $date_end = $period[1] ?? $now;
 
         $webim_dialog_list_since_param_repository = app(SupportWebimDialogsListSinceParamRepository::class);
         $sinces = $webim_dialog_list_since_param_repository->getByPeriod($date_start, $date_end);
-
 
         /** @var \Illuminate\Support\Collection $chats */
         $chats = collect([]);
 
         foreach($sinces as $since) {
-            $result = $this->sendRequest('chats', ['since' => $since->since]);
+            $result = $this->getDialogsBySince($since->since);
             $chats = $chats->merge($result['chats']);
+        }
+
+        /**
+         * Если концов периода выбрано текущее время проверить наличие новых диалогов в webim.
+         */
+        if($date_end === $now) {
+            while($result['more_chats_available']) {
+                $result = $this->getDialogsBySince($result['last_ts']);
+
+                $chats = $chats->merge($result['chats']);
+            }
         }
 
         $chats = $chats->unique('id');
@@ -326,13 +341,13 @@ class Webim implements OnlineConsultant
          * Фильтрация сообщений по дате в диалоге.
          */
 
-        $chats = $chats->map(function($chat) use($date_end) {
+        $chats = $chats->map(function($chat) use($date_start, $date_end) {
             $messages = [];
 
             foreach($chat['messages'] as $message) {
                 $message['created_at'] = Carbon::parse($message['created_at']);
 
-                if ($message['created_at'] <= $date_end) {
+                if ($message['created_at'] >= $date_start && $message['created_at'] <= $date_end) {
                     $messages[] = $message;
                 }
             }

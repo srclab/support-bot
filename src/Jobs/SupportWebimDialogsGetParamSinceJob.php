@@ -46,11 +46,17 @@ class SupportWebimDialogsGetParamSinceJob implements ShouldQueue
 
         do {
 
-            $result = $webim->getPeriodBySince($last_since);
+            $result = $webim->getDialogsBySince($last_since);
+
+            if(empty($result['chats']) || count($result['chats']) < 100) {
+                break;
+            }
+
+            $periods = $webim->getPeriodByDialogs($result['chats']);
 
             if(!empty($result)) {
 
-                $webim_dialog_list_since_param_repository->addRecord($result['periods']['from'], $result['periods']['to'], $last_since, $result['last_ts']);
+                $webim_dialog_list_since_param_repository->addRecord($periods['from'], $periods['to'], $last_since, $result['last_ts']);
 
                 $last_since = $result['last_ts'];
 
