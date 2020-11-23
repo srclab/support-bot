@@ -38,7 +38,7 @@ class SupportWebimDialogsListSinceParamRepository extends Repository
      */
     public function getByPeriod($from, $to)
     {
-        return $this->query()->where('period_from', '>=', $from)->where('period_to', '<=', $to)->get();
+        return $this->query()->where('period_to', '>=', $from)->where('period_to', '<=', $to)->get();
     }
 
     //****************************************************************

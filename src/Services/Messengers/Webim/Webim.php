@@ -325,14 +325,19 @@ class Webim implements OnlineConsultant
         }
 
         /**
-         * Если концов периода выбрано текущее время проверить наличие новых диалогов в webim.
+         * Проверка наличия новых диалогов в Webim.
          */
-        if($date_end === $now) {
-            while($result['more_chats_available']) {
-                $result = $this->getDialogsBySince($result['last_ts']);
+        if($date_end >= $now || $sinces->isEmpty() || empty($result)) {
+
+            if($sinces->isEmpty() || empty($result)) {
+                $last_ts = $webim_dialog_list_since_param_repository->getLast()->last_ts;
+            }
+
+            do {
+                $result = $this->getDialogsBySince($result['last_ts'] ?? $last_ts);
 
                 $chats = $chats->merge($result['chats']);
-            }
+            } while($result['more_chats_available']);
         }
 
         $chats = $chats->unique('id');
