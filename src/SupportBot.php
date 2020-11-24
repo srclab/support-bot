@@ -67,11 +67,6 @@ class SupportBot
     public function processWebhook(array $data)
     {
         /**
-         * TODO: удалить после проверки.
-         */
-        Log::debug('Данные вебхук: ', $data);
-
-        /**
          * Проверка полученных данных, определение возможности сформировать ответ.
          */
         if(!$this->online_consultant->checkWebhookData($data)) {

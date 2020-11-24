@@ -57,8 +57,8 @@ return [
      | table_name - название таблицы с отложенными редиректами чата
      | message_not_working_hours - сообщение при попытке перенаправления в нерабочее время
      | message_not_operators - сообщение при попытке перенаправления при отсуствии операторов
-     | working_hours.period_begin - начало рабочего времени операторов
-     | working_hours.period_end - конец рабочего времени операторов
+     | not_working_hours.period_begin - конец рабочего времени операторов
+     | not_working_hours.period_end - начало рабочего времени операторов
      | except_operators_ids - не переводить на операторов с ид
      |
      */

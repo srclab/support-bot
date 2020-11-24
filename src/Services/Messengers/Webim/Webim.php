@@ -58,7 +58,6 @@ class Webim implements OnlineConsultant
             if(strstr($data['visitor']['fields']['name'], 'Test4556') === false) {
                 return false;
             }
-            Log::debug('Данные вебхук подходят для теста: ', $data);
         }
 
         /**
@@ -530,8 +529,6 @@ class Webim implements OnlineConsultant
         if(empty($messages)) {
             return false;
         }
-
-        $result = false;
 
         for($i = count($messages)-1; $i > 0; $i--) {
             if ($messages[$i]['kind'] == 'info') {
