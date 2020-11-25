@@ -20,7 +20,7 @@ class Schedule
      * @param \Illuminate\Console\Scheduling\Schedule $schedule
      * @param string $queue
      */
-    public function schedule(SystemSchedule $schedule, $queue)
+    public static function schedule(SystemSchedule $schedule, $queue)
     {
         $config = array_merge(config('support_bot'), app_config('support_bot'));
 
