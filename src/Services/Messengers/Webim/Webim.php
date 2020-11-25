@@ -29,7 +29,7 @@ class Webim implements OnlineConsultant
      */
     public function __construct(array $config)
     {
-        if (empty($config['webim']) || empty($config['webim']['api_token']) || empty($config['webim']['login']) || empty($config['webim']['password'])) {
+        if (empty($config['webim']) || empty($config['webim']['subdomain']) || empty($config['webim']['api_token']) || empty($config['webim']['login']) || empty($config['webim']['password'])) {
             throw new \Exception('Не установлены конфигурационные данные для обращения к Webim');
         }
 
@@ -536,14 +536,13 @@ class Webim implements OnlineConsultant
                 if(preg_match('/Диалог был передан оператору (.*)/m', $messages[$i]['message'], $operator)) {
                     if($operator[1] == $this->config['bot_operator_name']) {
                         return true;
-                        break;
-                    } else {
-                        break;
                     }
+
+                    break;
                 }
-            } else {
-                break;
             }
+
+            break;
         }
 
         return false;
@@ -606,7 +605,7 @@ class Webim implements OnlineConsultant
             }
 
             curl_setopt_array($ch, [
-                CURLOPT_URL => "https://allputru001.webim.ru/api/v2/{$api_method}",
+                CURLOPT_URL => "https://{$this->config['subdomain']}.webim.ru/api/v2/{$api_method}",
                 CURLOPT_RETURNTRANSFER => 1,
                 CURLOPT_USERPWD => $this->config['login'].':'.$this->config['password'],
                 CURLOPT_HTTPHEADER => [
@@ -622,7 +621,7 @@ class Webim implements OnlineConsultant
             }
 
             curl_setopt_array($ch, [
-                CURLOPT_URL => "https://allputru001.webim.ru/api/bot/v2/{$api_method}",
+                CURLOPT_URL => "https://{$this->config['subdomain']}.webim.ru/api/bot/v2/{$api_method}",
                 CURLOPT_POST => true,
                 CURLOPT_POSTFIELDS => $data,
                 CURLOPT_RETURNTRANSFER => 1,

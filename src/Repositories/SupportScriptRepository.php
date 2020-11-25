@@ -29,7 +29,7 @@ class SupportScriptRepository extends Repository
         return $this->query()
             ->where([
                 ['send_message_at', '<', Carbon::now()],
-                ['step', 0]
+                'step' => 0
             ])
             ->limit(20)
             ->get();
@@ -47,7 +47,7 @@ class SupportScriptRepository extends Repository
          */
         return $this->query()
             ->where([
-                ['user_answered', false],
+                'user_answered' => false,
                 ['start_script_at', '<', Carbon::now()->subMinute(30)],
             ])
             ->get();

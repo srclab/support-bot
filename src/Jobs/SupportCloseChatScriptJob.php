@@ -38,6 +38,7 @@ class SupportCloseChatScriptJob implements ShouldQueue
             return;
         }
 
+        /** @var \SrcLab\SupportBot\Models\SupportScriptModel $unanswered_script */
         foreach($unanswered_scripts as $unanswered_script) {
 
             $dialog = $online_consultant->getDialogFromClientByPeriod($unanswered_script->search_id);

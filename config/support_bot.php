@@ -256,12 +256,13 @@ return [
         ],
         'webim' => [
             'api_token' => env('SRCLAB_SUPPORT_BOT_WEBIM_API_TOKEN', ''),
+            'subdomain' => env('SRCLAB_SUPPORT_BOT_WEBIM_SUBDOMAIN', ''),
             'login' => env('SRCLAB_SUPPORT_BOT_WEBIM_LOGIN', ''),
             'password' => env('SRCLAB_SUPPORT_BOT_WEBIM_PASSWORD', ''),
             'webhook_secret' => env('SRCLAB_SUPPORT_BOT_WEBIM_WEBHOOK_SECRET', ''),
             'bot_operator_name' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_OPERATOR_NAME', ''),
             'bot_operator_id' => env('SRCLAB_SUPPORT_BOT_WEBIM_BOT_OPERATOR_ID', ''),
-            'dialog_list_since_param_table_name' => 'support_webim_dialogs_list_since_param',
+            'dialog_list_since_param_table_name' => 'support_bot_webim_dialogs',
         ],
 
     ],
