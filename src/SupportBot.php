@@ -9,7 +9,6 @@ use SrcLab\SupportBot\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
-use Throwable;
 
 class SupportBot
 {
@@ -90,7 +89,7 @@ class SupportBot
                     /**
                      * Задержка чата на боте в случае если на бота чат перекинул оператор.
                      */
-                    if ($this->config['online_consultant'] == 'webim') {
+                    if ($this->online_consultant->getOnlineConsultantName() == 'webim') {
                         if ($data['event'] == 'new_chat') {
                             if (!$result_handle) {
                                 $this->support_bot_scripts->planningPendingScripts($search_id);

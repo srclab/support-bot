@@ -4,6 +4,7 @@ namespace SrcLab\SupportBot;
 
 use Illuminate\Http\Request;
 use Illuminate\Routing\Controller as BaseController;
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 
 class SupportBotController extends BaseController
 {
@@ -29,7 +30,7 @@ class SupportBotController extends BaseController
      */
     public function support_bot($secret = null)
     {
-        $config = array_merge(config('support_bot'), app_config('support_bot'));
+        $online_consultant = app(OnlineConsultant::class);
 
         $post_data = $this->request->getContent();
 
@@ -38,7 +39,7 @@ class SupportBotController extends BaseController
 
             $result = app(\SrcLab\SupportBot\SupportBot::class)->processWebhook(! empty($secret) ? array_merge($post_data, ['secretKey' => $secret]) : $post_data);
 
-            if($config['online_consultant'] == 'webim' && !empty($result)) {
+            if($online_consultant->getOnlineConsultantName() == 'webim' && !empty($result)) {
                 return response()->json(['result' => 'ok']);
             }
         }

@@ -7,7 +7,7 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 
 class SupportRedirectChatJob implements ShouldQueue
@@ -29,7 +29,7 @@ class SupportRedirectChatJob implements ShouldQueue
     public function handle()
     {
         $config = array_merge(config('support_bot'), app_config('support_bot'));
-        $online_consultant = app(OnlineConsultant::class, ['config' => $config['accounts']]);
+        $online_consultant = app(OnlineConsultant::class);
         $support_redirect_chat_repository = app(SupportRedirectChatRepository::class);
 
         if(!empty($config['redirect_chats']['not_working_hours']['period_begin']) && !empty($config['redirect_chats']['not_working_hours']['period_end']) && check_current_time($config['redirect_chats']['not_working_hours']['period_begin'], $config['redirect_chats']['not_working_hours']['period_end'])) {
@@ -54,14 +54,9 @@ class SupportRedirectChatJob implements ShouldQueue
                 $dialog = $online_consultant->getDialogFromClientByPeriod($redirect->client_id);
                 $operator_id = $online_consultant->getParamFromDialog('operator_id', $dialog);
 
-                /**
-                 * Проверка находится ли диалог на боте Webim.
-                 */
-                if($config['online_consultant'] == 'webim') {
-                    if($dialog['operator_id'] != $config['accounts']['webim']['bot_operator_id']) {
-                        continue;
-                    }
-                } elseif($config['online_consultant'] == 'talkme') {
+                if($online_consultant->isBot() && !$online_consultant->isDialogOnTheBot($dialog)) {
+                    continue;
+                } elseif(!$online_consultant->isBot()) {
                     if(in_array($operator_id, $operators_ids)) {
                         $redirect->delete();
                         continue;

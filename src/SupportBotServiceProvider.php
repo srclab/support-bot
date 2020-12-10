@@ -33,31 +33,13 @@ class SupportBotServiceProvider extends ServiceProvider
          */
         $this->loadRoutesFrom(__DIR__.'/routes.php');
 
+        /**
+         * Команды.
+         */
         if ($this->app->runningInConsole()) {
             $this->commands([
                 ClearExceptionScriptsCache::class
             ]);
         }
-
     }
-
-    /**
-     * Register the service provider.
-     *
-     * @return void
-     */
-    public function register()
-    {
-        $config = array_merge(config('support_bot'), app_config('support_bot'));
-
-        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, function($app) use($config)
-        {
-            if($config['online_consultant'] == 'webim') {
-                return app(Webim::class, ['config' => $config['accounts']]);
-            } else {
-                return app(TalkMe::class, ['config' => $config['accounts']]);
-            }
-        });
-    }
-
 }

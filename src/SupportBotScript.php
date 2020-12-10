@@ -275,9 +275,9 @@ class SupportBotScript
             }
 
             /**
-             * Закрытие диалога если сообщение финальное для Webim.
+             * Закрытие диалога.
              */
-            if($script->step == -1 && $this->config['online_consultant'] == 'webim') {
+            if($script->step == -1 && $this->online_consultant->isCloseChatFunction()) {
                 $this->online_consultant->closeChat($script->search_id);
             }
 
@@ -331,7 +331,10 @@ class SupportBotScript
         /**
          * Проверка находится ли диалог на боте для Webim.
          */
-        if($this->config['online_consultant'] == 'webim' && ($dialog['operator_id'] != $this->config['accounts']['webim']['bot_operator_id'] && !$this->online_consultant->isClientRedirectedToBot($dialog))) {
+        if($this->online_consultant->getOnlineConsultantName() == 'webim'
+            && (!$this->online_consultant->isDialogOnTheBot($dialog)
+                && !$this->online_consultant->isClientRedirectedToBot($dialog))
+        ) {
             $script->delete();
             return;
         }
@@ -366,11 +369,11 @@ class SupportBotScript
             $script->prev_step = 0;
             $script->start_script_at = Carbon::now();
             $script->save();
-        } elseif($this->config['online_consultant'] == 'webim') {
-
-            $this->online_consultant->closeChat($script->search_id);
-            $script->delete();
         } else {
+
+            if($this->online_consultant->isCloseChatFunction()) {
+                $this->online_consultant->closeChat($script->search_id);
+            }
 
             $script->delete();
         }

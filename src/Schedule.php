@@ -7,9 +7,9 @@ use Illuminate\Console\Scheduling\Schedule as SystemSchedule;
 use SrcLab\SupportBot\Jobs\SupportSendingScriptMessageJob as SupportBotScriptJobCron;
 use SrcLab\SupportBot\Jobs\SupportCloseChatScriptJob as SupportBotCloseChatScriptJobCron;
 use SrcLab\SupportBot\Jobs\SupportRedirectChatJob as SupportBotRedirectChatJobCron;
-use SrcLab\SupportBot\Jobs\SupportWebimDialogsGetParamSinceJob as SupportBotWebimDialogsGetParamSinceJobCron;
 use SrcLab\SupportBot\SupportBot as SupportBotCron;
 
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use Illuminate\Support\Facades\Log;
 
 class Schedule
@@ -22,7 +22,7 @@ class Schedule
      */
     public static function schedule(SystemSchedule $schedule, $queue)
     {
-        $config = array_merge(config('support_bot'), app_config('support_bot'));
+        $online_consultant = app(OnlineConsultant::class);
 
         /**
          * Отправка отложенных сообщений бота поддержки.
@@ -57,7 +57,7 @@ class Schedule
             }
         })->everyTenMinutes();
 
-        if($config['online_consultant'] == 'webim') {
+        if($online_consultant->isCloseChatFunction()) {
             /**
              * Закрытие чата при бездействии.
              */
@@ -66,17 +66,6 @@ class Schedule
                     SupportBotCloseChatScriptJobCron::dispatch()->onQueue($queue);
                 } catch (Throwable $e) {
                     Log::error('[SrcLab\SupportBot|ScheduleTask] SupportBotCloseChatScriptJobCron -> dispatch -> onQueue', $e);
-                }
-            })->everyTenMinutes();
-
-            /**
-             * Сбор параметра since для получения диалогов.
-             */
-            $schedule->call(function () use($queue) {
-                try {
-                    SupportBotWebimDialogsGetParamSinceJobCron::dispatch()->onQueue($queue);
-                } catch (Throwable $e) {
-                    Log::error('[SrcLab\SupportBot|ScheduleTask] SupportBotWebimDialogsGetParamSinceJobCron -> dispatch -> onQueue', $e);
                 }
             })->everyTenMinutes();
         }
