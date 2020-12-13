@@ -3,7 +3,7 @@
 namespace SrcLab\SupportBot;
 
 use Carbon\Carbon;
-use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
@@ -20,7 +20,7 @@ class SupportBotScript
     protected $config;
 
     /**
-     * @var \SrcLab\SupportBot\Contracts\OnlineConsultant
+     * @var \SrcLab\OnlineConsultant\Contracts\OnlineConsultant
      */
     protected $online_consultant;
 
@@ -50,7 +50,7 @@ class SupportBotScript
     public function __construct()
     {
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
-        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']]);
+        $this->online_consultant = app(OnlineConsultant::class);
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
         $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
@@ -165,12 +165,9 @@ class SupportBotScript
                         if(!empty($variant['for_operator'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
-                             *
-                             * TODO: убрать удаление и раскоментировать данные код после проверки.
                              */
-                            /*$script->step = -1;
-                            $script->save();*/
-                            $script->delete();
+                            $script->step = -1;
+                            $script->save();
 
                             if(!empty($this->config['redirect_chats']['not_working_hours']['period_begin']) && !empty($this->config['redirect_chats']['not_working_hours']['period_end']) && check_current_time($this->config['redirect_chats']['not_working_hours']['period_begin'], $this->config['redirect_chats']['not_working_hours']['period_end'])) {
 
@@ -214,11 +211,9 @@ class SupportBotScript
                         } elseif (!empty($variant['is_final'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
-                             * TODO: убрать удаление и раскоментировать данные код после проверки.
                              */
-                            /*$script->step = -1;
-                            $script->save();*/
-                            $script->delete();
+                            $script->step = -1;
+                            $script->save();
 
                         } elseif (!empty($variant['next_step'])) {
                             /**
@@ -486,11 +481,9 @@ class SupportBotScript
     {
         /**
          * Установка несуществующего шага для завершения скрипта.
-         * TODO: убрать удаление и раскоментировать данные код после проверки.
          */
-        /*$script->step = -1;
-        $script->save();*/
-        $script->delete();
+        $script->step = -1;
+        $script->save();
 
         return $this->config['scripts']['clarification']['steps'][$this->config['scripts']['clarification']['final_step']]['messages'];
     }

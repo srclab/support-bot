@@ -42,16 +42,25 @@ class SupportCloseChatScriptJob implements ShouldQueue
 
             $dialog = $online_consultant->getDialogFromClientByPeriod($unanswered_script->search_id);
 
+            /**
+             * TODO: предусмотреть что диалог может быть активным и недавно были отправлены сообщения.
+             */
             if($online_consultant->isBot() && $online_consultant->isDialogOnTheBot($dialog) || !$online_consultant->isBot()) {
-                $online_consultant->closeChat($unanswered_script->client_id);
+                $online_consultant->closeChat($unanswered_script->search_id);
+
+                /**
+                 * Установка несуществующего шага для завершения скрипта.
+                 */
+                $unanswered_script->step = -1;
+                $unanswered_script->save();
             } else {
                 /**
                  * Обнуление сценария в случае если диалог подхватил оператор.
                  *
-                 * TODO: поставить 3 часа после проверки
+                 * TODO: проверить
                  */
                 $unanswered_script->step = 0;
-                $unanswered_script->send_message_at = Carbon::now()->addMinute(10);
+                $unanswered_script->send_message_at = Carbon::now()->addHour(3);
                 $unanswered_script->user_answered = false;
                 $unanswered_script->start_script_at = null;
 

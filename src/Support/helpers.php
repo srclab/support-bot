@@ -19,7 +19,9 @@ if (!function_exists('app_config')) {
 
         return config("{$country_code}.{$key}", config($key, $default));
     }
+}
 
+if (!function_exists('check_current_time')) {
     /**
      * Проверка, что текущее время содержится в указанном интервале.
      *
@@ -31,8 +33,8 @@ if (!function_exists('app_config')) {
     {
         $now_time = now()->format('H:i');
 
-        if($time_begin > $time_end) {
-            return !($now_time < $time_begin && $now_time > $time_end);
+        if ($time_begin > $time_end) {
+            return ! ($now_time < $time_begin && $now_time > $time_end);
         }
 
         return $now_time >= $time_begin && $now_time <= $time_end;

@@ -5,7 +5,7 @@ namespace SrcLab\SupportBot;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
-use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
@@ -20,7 +20,7 @@ class SupportBot
     protected $messages_repository;
 
     /**
-     * @var \SrcLab\SupportBot\Contracts\OnlineConsultant
+     * @var \SrcLab\OnlineConsultant\Contracts\OnlineConsultant
      */
     protected $online_consultant;
 
@@ -51,7 +51,7 @@ class SupportBot
     {
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
-        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']]);
+        $this->online_consultant = app(OnlineConsultant::class);
         $this->support_bot_scripts = app(SupportBotScript::class);
         $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
         $this->cache = app('cache');
@@ -68,7 +68,7 @@ class SupportBot
         /**
          * Проверка полученных данных, определение возможности сформировать ответ.
          */
-        if(!$this->online_consultant->checkWebhookData($data)) {
+        if(!$this->online_consultant->checkWebhookDataForNewMessage($data)) {
             return false;
         }
 
@@ -118,7 +118,7 @@ class SupportBot
         /**
          * В инстаграм не отвечать.
          */
-        if($this->config['online_consultant'] == 'talkme' && !empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
+        if($this->online_consultant->getOnlineConsultantName() == 'talk_me' && !empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
             return false;
         }
 
