@@ -8,8 +8,8 @@ use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
+use Illuminate\Support\Facades\Log;
 
-/** TODO: предусмотреть вариант что dialogId записанный в базе данных будет неактивным ( несуществует ) */
 class SupportBotScript
 {
     use SupportBotStatistic;
@@ -243,6 +243,15 @@ class SupportBotScript
                 if (empty($result)) {
                     $result = $this->getFinalMessageAndDeactivateScript($script);
                 }
+            } elseif($this->online_consultant->getOnlineConsultantName() == 'webim' && !empty($messages)) {
+                $message = array_pop($messages);
+
+                /**
+                 * Отправка финального сообщения в случае если сообщения пользователя было файлом.
+                 */
+                if($message['kind'] == 'file_visitor') {
+                    $result = $this->getFinalMessageAndDeactivateScript($script);
+                }
             }
         }
 
@@ -323,6 +332,15 @@ class SupportBotScript
             return;
         }
 
+        /** TODO: Проверить!!! предусмотреть вариант что dialogId записанный в базе данных будет неактивным ( несуществует ) */
+        /**
+         * Проверка не закрыт ли диалог.
+         */
+        if($this->online_consultant->isChatClosed($dialog)) {
+            $script->delete();
+            return;
+        }
+
         /**
          * Проверка находится ли диалог на боте для Webim.
          */
@@ -343,11 +361,12 @@ class SupportBotScript
         $datetime_message_client = $this->online_consultant->getDateTimeLastMessage($dialog);
 
         /** @var \Carbon\Carbon $datetime_message_client */
-        if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < 1) {
+        /** TODO: расскоментировать после проверки */
+        /*if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < 1) {
             $script->send_message_at = $datetime_message_client->addMinute(1);
             $script->save();
             return;
-        }
+        }*/
 
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
@@ -457,10 +476,18 @@ class SupportBotScript
             $messages = array_slice($messages, ($script_message_id + 2));
 
             /**
-             * Удаление скрипта в случае если диалог подхватил реальный оператор.
+             * Обнуление сценария в случае если диалог подхватил оператор.
              */
             if(!empty($this->online_consultant->findOperatorMessages($messages))) {
-                $script->delete();
+                /**
+                 * Обнуление сценария в случае если диалог подхватил оператор.
+                 */
+                $script->step = 0;
+                $script->send_message_at = Carbon::now()->addHour(3);
+                $script->user_answered = false;
+                $script->start_script_at = null;
+
+                $script->save();
 
                 return false;
             } else {

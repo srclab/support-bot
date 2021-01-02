@@ -40,24 +40,54 @@ class SupportCloseChatScriptJob implements ShouldQueue
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $unanswered_script */
         foreach($unanswered_scripts as $unanswered_script) {
 
-            $dialog = $online_consultant->getDialogFromClientByPeriod($unanswered_script->search_id);
+            $chat_closing_time = config('support_bot.scripts.chat_closing_time') ?? 24;
+            $dialog = $online_consultant->getDialogFromClientByPeriod($unanswered_script->search_id, [Carbon::now()->subHours($chat_closing_time), Carbon::now()->endOfDay()]);
+
+            if(empty($dialog)) {
+                $unanswered_script->delete();
+                Log::error("[SrcLab\SupportBot|SupportCloseChatScriptJob] Диалога/клиента с id {$unanswered_script->search_id} не существует.");
+                return;
+            }
 
             /**
-             * TODO: предусмотреть что диалог может быть активным и недавно были отправлены сообщения.
+             * TODO: Проверить!!!!! предусмотреть что диалог может быть активным и недавно были отправлены сообщения.
              */
             if($online_consultant->isBot() && $online_consultant->isDialogOnTheBot($dialog) || !$online_consultant->isBot()) {
+
+                /**
+                 * Если недавно были сообщения от клиента или оператора не закрывать диалог.
+                 */
+                $messages = $online_consultant->getParamFromDialog('messages', $dialog);
+
+                if(!empty($messages)) {
+                    do {
+                        $message = array_pop($messages);
+                    } while (! in_array($online_consultant->getParamFromMessage('who_send', $message), [
+                        'operator',
+                        'client'
+                    ]));
+                }
+
+                /**
+                 * TODO: после проверки поставить $online_consultant->getParamFromMessage('created_at', $message)->diffInHours(Carbon::now())
+                 */
+                if(!empty($message) && $online_consultant->getParamFromMessage('created_at', $message)->diffInMinutes(Carbon::now()) < $chat_closing_time) {
+                    $unanswered_script->delete();
+                    return;
+                }
+
+                /**
+                 * Закрытие чата.
+                 */
                 $online_consultant->closeChat($unanswered_script->search_id);
 
                 /**
-                 * Установка несуществующего шага для завершения скрипта.
+                 * Удаление скрипта.
                  */
-                $unanswered_script->step = -1;
-                $unanswered_script->save();
+                $unanswered_script->delete();
             } else {
                 /**
                  * Обнуление сценария в случае если диалог подхватил оператор.
-                 *
-                 * TODO: проверить
                  */
                 $unanswered_script->step = 0;
                 $unanswered_script->send_message_at = Carbon::now()->addHour(3);

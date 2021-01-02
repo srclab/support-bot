@@ -66,7 +66,7 @@ return [
         'table_name' => 'support_bot_redirect_chats',
         'message_not_working_hours' => 'К сожалению, мы сейчас не можем вам ответить. Но обязательно напишем вам до 9 часов утра 😉',
         'message_not_operators' => 'К сожалению, мы сейчас не можем вам ответить. Но обязательно напишем вам как только появятся свободные операторы',
-        'working_hours' => [
+        'not_working_hours' => [
             'period_begin' => '10:00',
             'period_end' => '22:00',
         ],
@@ -88,6 +88,7 @@ return [
         'table_name' => 'support_bot_pending_scripts',
         'exceptions_table_name' => 'support_bot_pending_exceptions',
         'select_message' => '(?:https:\/\/vse-sdal.com\/promo|https:\/\/vse-sdal.com\/onlajn-pomoshch|http:\/\/taplink.cc\/vsesdal_official)',
+        'chat_closing_time' => 24,
         'enabled_for_user_ids' => [],
         'send_notification_period' => [
             'period_begin' => '10:00',

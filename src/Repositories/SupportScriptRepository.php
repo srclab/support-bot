@@ -42,13 +42,15 @@ class SupportScriptRepository extends Repository
      */
     public function getNextUnansweredScripts()
     {
+        $chat_closing_time = config('support_bot.scripts.chat_closing_time') ?? 24;
+
         /**
-         * TODO: после проверки для карбона установить Carbon::now()->subDays(1)
+         * TODO: после проверки поставить Carbon::now()->subHours($chat_closing_time)
          */
         return $this->query()
             ->where([
                 'user_answered' => false,
-                ['start_script_at', '<', Carbon::now()->subMinute(30)],
+                ['start_script_at', '<', Carbon::now()->subMinutes($chat_closing_time)],
             ])
             ->get();
     }
