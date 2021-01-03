@@ -178,32 +178,10 @@ class SupportBotScript
                                 $this->redirect_chat_repository->addRecord($client_id);
 
                             } else {
-                                $operators_ids = $this->online_consultant->getListOnlineOperatorsIds();
-
-                                $operator_id = $this->online_consultant->getParamFromDialog('operator_id', $dialog);
-
                                 /**
-                                 * Удаление текущего оператора со списка операторов.
+                                 * Перенаправление пользователя.
                                  */
-                                $operators_ids = array_diff($operators_ids, [$operator_id]);
-
-                                /**
-                                 * Получение разрешенных операторов.
-                                 */
-                                if(!empty($this->config['redirect_chats']['except_operators_ids'])) {
-                                    $operators_ids = array_diff($operators_ids, $this->config['redirect_chats']['except_operators_ids']);
-                                }
-
-                                if(empty($operators_ids)) {
-
-                                    $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
-
-                                    $this->sendMessageAndIncrementStatistic($this->online_consultant->getParamFromDialog('client_id', $dialog), $this->config['redirect_chats']['message_not_operators']);
-
-                                    $this->redirect_chat_repository->addRecord($client_id);
-                                } else {
-                                    $this->online_consultant->redirectDialogToOperator($dialog, $operators_ids[array_rand($operators_ids)]);
-                                }
+                                $this->redirectUser($dialog);
                             }
 
                             return true;
@@ -241,7 +219,18 @@ class SupportBotScript
                  * Отправка финального сообщения в случае если сообщения пользователя не совпало ни с одним из варианта текущего шага.
                  */
                 if (empty($result)) {
-                    $result = $this->getFinalMessageAndDeactivateScript($script);
+
+                    /**
+                     * Перенаправление пользователя.
+                     */
+                    $this->redirectUser($dialog, false);
+
+                    /**
+                     * Удаление скрипта.
+                     */
+                    $script->delete();
+
+                    return false;
                 }
             } elseif($this->online_consultant->getOnlineConsultantName() == 'webim' && !empty($messages)) {
                 $message = array_pop($messages);
@@ -250,7 +239,17 @@ class SupportBotScript
                  * Отправка финального сообщения в случае если сообщения пользователя было файлом.
                  */
                 if($message['kind'] == 'file_visitor') {
-                    $result = $this->getFinalMessageAndDeactivateScript($script);
+                    /**
+                     * Перенаправление пользователя.
+                     */
+                    $this->redirectUser($dialog, false);
+
+                    /**
+                     * Удаление скрипта.
+                     */
+                    $script->delete();
+
+                    return false;
                 }
             }
         }
@@ -399,7 +398,7 @@ class SupportBotScript
      * @param array $messages
      * @return bool
      */
-    protected function checkDialogScriptLaunchConditions(array $messages)
+    private function checkDialogScriptLaunchConditions(array $messages)
     {
         if(empty($messages)) {
             return false;
@@ -421,11 +420,65 @@ class SupportBotScript
 
             if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
                 return false;
-                break;
             }
         }
 
         return true;
+    }
+
+    /**
+     * Перенаправление пользователя на доступного оператора, либо отложенное перенаправление.
+     *
+     * @param array $dialog
+     * @param bool $notification
+     */
+    private function redirectUser(array $dialog, $notification = true)
+    {
+        /**
+         * Получение разрешенных операторов.
+         */
+        $operators_ids = $this->getOnlineOperatorsListToRedirect([$this->online_consultant->getParamFromDialog('operator_id', $dialog)]);
+
+        if(empty($operators_ids)) {
+
+            $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
+
+            if(!empty($notification)) {
+                $this->sendMessageAndIncrementStatistic($this->online_consultant->getParamFromDialog('client_id', $dialog), $this->config['redirect_chats']['message_not_operators']);
+            }
+
+            $this->redirect_chat_repository->addRecord($client_id);
+
+        } else {
+            $this->online_consultant->redirectDialogToOperator($dialog, $operators_ids[array_rand($operators_ids)]);
+        }
+    }
+
+    /**
+     * Получение списка операторов онлайн исключая оператора диалога.
+     *
+     * @param array $exclude_ids
+     * @return array
+     */
+    private function getOnlineOperatorsListToRedirect($exclude_ids = [])
+    {
+        $operators_ids = $this->online_consultant->getListOnlineOperatorsIds();
+
+        /**
+         * Удаление текущего оператора со списка операторов.
+         */
+        if(!empty($exclude_ids)) {
+            $operators_ids = array_diff($operators_ids, $exclude_ids);
+        }
+
+        /**
+         * Получение разрешенных операторов.
+         */
+        if(!empty($this->config['redirect_chats']['except_operators_ids'])) {
+            $operators_ids = array_diff($operators_ids, $this->config['redirect_chats']['except_operators_ids']);
+        }
+
+        return $operators_ids;
     }
 
     /**
@@ -522,7 +575,7 @@ class SupportBotScript
      * @param string $client_name
      * @return string
      */
-    public function insertClientNameInString($string, $client_name)
+    private function insertClientNameInString($string, $client_name)
     {
         return str_replace(':client_name', $client_name, $string);
     }
