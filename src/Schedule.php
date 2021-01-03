@@ -26,8 +26,6 @@ class Schedule
 
         /**
          * Отправка отложенных сообщений бота поддержки.
-         *
-         * TODO: после проверки everyMinute
          */
         $schedule->call(function () {
             try {
@@ -39,8 +37,6 @@ class Schedule
 
         /**
          * Запуск скриптов бота поддержки.
-         *
-         * TODO: после проверки everyFiveMinutes
          */
         $schedule->call(function () use($queue) {
             try {
@@ -48,12 +44,10 @@ class Schedule
             } catch (Throwable $e) {
                 Log::error('[SrcLab\SupportBot|ScheduleTask] SupportBotScriptJobCron -> dispatch -> onQueue', $e);
             }
-        })->everyMinute();
+        })->everyFiveMinutes();
 
         /**
          * Отложенный редирект пользователя на оператора.
-         *
-         * TODO: после проверки everyTenMinutes
          */
         $schedule->call(function () use($queue) {
             try {
@@ -61,13 +55,11 @@ class Schedule
             } catch (Throwable $e) {
                 Log::error('[SrcLab\SupportBot|ScheduleTask] SupportBotRedirectChatJobCron -> dispatch -> onQueue', $e);
             }
-        })->everyMinute();
+        })->everyTenMinutes();
 
         if($online_consultant->isCloseChatFunction()) {
             /**
              * Закрытие чата при бездействии.
-             *
-             * TODO: после проверки everyTenMinutes
              */
             $schedule->call(function () use($queue) {
                 try {
@@ -75,7 +67,7 @@ class Schedule
                 } catch (Throwable $e) {
                     Log::error('[SrcLab\SupportBot|ScheduleTask] SupportBotCloseChatScriptJobCron -> dispatch -> onQueue', $e);
                 }
-            })->everyMinute();
+            })->everyTenMinutes();
         }
     }
 }

@@ -49,9 +49,6 @@ class SupportCloseChatScriptJob implements ShouldQueue
                 return;
             }
 
-            /**
-             * TODO: Проверить!!!!! предусмотреть что диалог может быть активным и недавно были отправлены сообщения.
-             */
             if($online_consultant->isBot() && $online_consultant->isDialogOnTheBot($dialog) || !$online_consultant->isBot()) {
 
                 /**
@@ -68,10 +65,7 @@ class SupportCloseChatScriptJob implements ShouldQueue
                     ]));
                 }
 
-                /**
-                 * TODO: после проверки поставить $online_consultant->getParamFromMessage('created_at', $message)->diffInHours(Carbon::now())
-                 */
-                if(!empty($message) && $online_consultant->getParamFromMessage('created_at', $message)->diffInMinutes(Carbon::now()) < $chat_closing_time) {
+                if(!empty($message) && $online_consultant->getParamFromMessage('created_at', $message)->diffInHours(Carbon::now()) < $chat_closing_time) {
                     $unanswered_script->delete();
                     return;
                 }

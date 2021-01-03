@@ -331,7 +331,6 @@ class SupportBotScript
             return;
         }
 
-        /** TODO: Проверить!!! предусмотреть вариант что dialogId записанный в базе данных будет неактивным ( несуществует ) */
         /**
          * Проверка не закрыт ли диалог.
          */
@@ -352,20 +351,16 @@ class SupportBotScript
         }
 
         /**
-         * TODO: поставить 2:59 минут после проверки.
-         */
-        /**
          * Проверка времени последнего сообщения клиента.
          */
         $datetime_message_client = $this->online_consultant->getDateTimeLastMessage($dialog);
 
         /** @var \Carbon\Carbon $datetime_message_client */
-        /** TODO: расскоментировать после проверки */
-        /*if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < 1) {
-            $script->send_message_at = $datetime_message_client->addMinute(1);
+        if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < 179) {
+            $script->send_message_at = $datetime_message_client->addHours(3);
             $script->save();
             return;
-        }*/
+        }
 
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
