@@ -283,9 +283,6 @@ class SupportBot
          */
         $answers = $this->config['auto_answers'];
 
-        /**
-         * TODO: сделать условие если последнее сообщение от оператора не отвечать ( для Webim ).
-         */
         $message = $this->online_consultant->getParamFromDataWebhook('message_text', $data);
         $result_answer = '';
         $answer_index = -1;
@@ -376,7 +373,6 @@ class SupportBot
 
     /**
      * Проверка на факт приветсвия клиента за текущий день.
-     * TODO: проверить метод.
      *
      * @param array $data
      * @return bool
