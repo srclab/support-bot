@@ -364,11 +364,11 @@ class SupportBotScript
 
         $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
+        $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
         if ($this->checkDialogScriptLaunchConditions($messages)) {
             $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
             $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
-            $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
             $this->sendMessageAndIncrementStatistic($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
             $this->sendButtonMessageAndIncrementStatistic($client_id, $buttons);
@@ -379,7 +379,7 @@ class SupportBotScript
             $script->save();
         } else {
 
-            if($this->online_consultant->isCloseChatFunction()) {
+            if($this->online_consultant->isCloseChatFunction() && !$this->redirect_chat_repository->isExistRecord($client_id)) {
                 $this->online_consultant->closeChat($script->search_id);
             }
 

@@ -32,7 +32,7 @@ class SupportRedirectChatJob implements ShouldQueue
         $online_consultant = app(OnlineConsultant::class);
         $support_redirect_chat_repository = app(SupportRedirectChatRepository::class);
 
-        if(!empty($config['redirect_chats']['not_working_hours']['period_begin']) && !empty($config['redirect_chats']['not_working_hours']['period_end']) && check_current_time($config['redirect_chats']['not_working_hours']['period_begin'], $config['redirect_chats']['not_working_hours']['period_end'])) {
+        if(!empty($config['redirect_chats']['not_working_hours']['period_begin']) && !empty($config['redirect_chats']['redirect_period_begin']) && check_current_time($config['redirect_chats']['not_working_hours']['period_begin'], $config['redirect_chats']['redirect_period_begin'])) {
             return;
         }
 
@@ -55,6 +55,7 @@ class SupportRedirectChatJob implements ShouldQueue
                 $operator_id = $online_consultant->getParamFromDialog('operator_id', $dialog);
 
                 if($online_consultant->isBot() && !$online_consultant->isDialogOnTheBot($dialog)) {
+                    $redirect->delete();
                     continue;
                 } elseif(!$online_consultant->isBot()) {
                     if(in_array($operator_id, $operators_ids)) {

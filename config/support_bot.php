@@ -59,6 +59,7 @@ return [
      | message_not_operators - сообщение при попытке перенаправления при отсуствии операторов
      | not_working_hours.period_begin - конец рабочего времени операторов
      | not_working_hours.period_end - начало рабочего времени операторов
+     | redirect_period_begin - время начала редиректа
      | except_operators_ids - не переводить на операторов с ид
      |
      */
@@ -70,6 +71,7 @@ return [
             'period_begin' => '10:00',
             'period_end' => '22:00',
         ],
+        'redirect_period_begin' => '10:00',
         'except_operators_ids' => [],
     ],
 

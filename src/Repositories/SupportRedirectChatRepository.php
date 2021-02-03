@@ -26,6 +26,19 @@ class SupportRedirectChatRepository extends Repository
             ->get();
     }
 
+    /**
+     * Проверка существует ли запись о редиректе для чата.
+     *
+     * @param $chat_id
+     * @return mixed
+     */
+    public function isExistRecord($chat_id)
+    {
+        return $this->query()
+            ->where('client_id', $chat_id)
+            ->exists();
+    }
+
     //****************************************************************
     //********************** Редактирование **************************
     //****************************************************************
