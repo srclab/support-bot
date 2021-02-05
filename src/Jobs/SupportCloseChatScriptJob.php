@@ -59,7 +59,7 @@ class SupportCloseChatScriptJob implements ShouldQueue
                 if(!empty($messages)) {
                     do {
                         $message = array_pop($messages);
-                    } while (! in_array($online_consultant->getParamFromMessage('who_send', $message), [
+                    } while (!empty($message) && !in_array($online_consultant->getParamFromMessage('who_send', $message), [
                         'operator',
                         'client'
                     ]));
