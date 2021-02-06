@@ -9,6 +9,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use Carbon\Carbon;
+use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 
 class SupportCloseChatScriptJob implements ShouldQueue
@@ -34,6 +35,7 @@ class SupportCloseChatScriptJob implements ShouldQueue
             return;
         }
 
+        $support_redirect_chat_repository = app(SupportRedirectChatRepository::class);
         $script_repository = app(SupportScriptRepository::class);
         $unanswered_scripts = $script_repository->getNextUnansweredScripts();
 
@@ -50,6 +52,14 @@ class SupportCloseChatScriptJob implements ShouldQueue
             }
 
             if($online_consultant->isBot() && $online_consultant->isDialogOnTheBot($dialog) || !$online_consultant->isBot()) {
+
+                /**
+                 * Если диалог находится в очереди на редирект не закрывать его.
+                 */
+                if($support_redirect_chat_repository->isExistRecord($online_consultant->getParamFromDialog('client_id', $dialog))) {
+                    $unanswered_script->delete();
+                    return;
+                }
 
                 /**
                  * Если недавно были сообщения от клиента или оператора не закрывать диалог.
@@ -83,12 +93,7 @@ class SupportCloseChatScriptJob implements ShouldQueue
                 /**
                  * Обнуление сценария в случае если диалог подхватил оператор.
                  */
-                $unanswered_script->step = 0;
-                $unanswered_script->send_message_at = Carbon::now()->addHour(3);
-                $unanswered_script->user_answered = false;
-                $unanswered_script->start_script_at = null;
-
-                $unanswered_script->save();
+                $unanswered_script->delete();
             }
         }
 

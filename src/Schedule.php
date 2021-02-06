@@ -55,7 +55,7 @@ class Schedule
             } catch (Throwable $e) {
                 Log::error('[SrcLab\SupportBot|ScheduleTask] SupportBotRedirectChatJobCron -> dispatch -> onQueue', $e);
             }
-        })->everyTenMinutes();
+        })->everyFiveMinutes();
 
         if($online_consultant->isCloseChatFunction()) {
             /**

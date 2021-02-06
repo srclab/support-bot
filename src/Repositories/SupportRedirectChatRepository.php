@@ -22,7 +22,7 @@ class SupportRedirectChatRepository extends Repository
     public function getNextPart()
     {
         return $this->query()
-            ->limit(20)
+            ->limit(10)
             ->get();
     }
 
