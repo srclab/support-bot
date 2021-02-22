@@ -57,6 +57,16 @@ abstract class Repository
     }
 
     /**
+     * Получить новый экземпляр модели.
+     *
+     * @return \Illuminate\Database\Eloquent\Model
+     */
+    public function new()
+    {
+        return new $this->model;
+    }
+
+    /**
      * Получение доп условия для запроса.
      *
      * @return array

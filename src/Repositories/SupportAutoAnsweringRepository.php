@@ -8,7 +8,7 @@ use Carbon\Carbon;
 class SupportAutoAnsweringRepository extends Repository
 {
     /**
-     * SupportAutoAnswering constructor.
+     * SupportAutoAnsweringRepository constructor.
      */
     public function __construct()
     {

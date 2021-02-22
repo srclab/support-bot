@@ -30,13 +30,23 @@ class SupportCloseChatScriptJob implements ShouldQueue
      */
     public function handle()
     {
+        /** @var \SrcLab\OnlineConsultant\Contracts\OnlineConsultant $online_consultant */
         $online_consultant = app(OnlineConsultant::class);
+
+        /**
+         * Проверка есть ли у текущего чата функция закрытия чата.
+         */
         if(!$online_consultant->isCloseChatFunction()) {
             return;
         }
 
+        /** @var \SrcLab\SupportBot\Repositories\SupportRedirectChatRepository $support_redirect_chat_repository */
         $support_redirect_chat_repository = app(SupportRedirectChatRepository::class);
+
+        /** @var \SrcLab\SupportBot\Repositories\SupportScriptRepository $script_repository */
         $script_repository = app(SupportScriptRepository::class);
+
+        /** @var \Illuminate\Database\Eloquent\Collection $unanswered_scripts */
         $unanswered_scripts = $script_repository->getNextUnansweredScripts();
 
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $unanswered_script */
@@ -61,11 +71,11 @@ class SupportCloseChatScriptJob implements ShouldQueue
                     return;
                 }
 
-                /**
-                 * Если недавно были сообщения от клиента или оператора не закрывать диалог.
-                 */
                 $messages = $online_consultant->getParamFromDialog('messages', $dialog);
 
+                /**
+                 * Получение последнего сообщения от клиента или оператора.
+                 */
                 if(!empty($messages)) {
                     do {
                         $message = array_pop($messages);
@@ -75,6 +85,9 @@ class SupportCloseChatScriptJob implements ShouldQueue
                     ]));
                 }
 
+                /**
+                 * Если сообщение от клиента/оператора было отправлено раньше срока закрытия удалить запись о редиректе.
+                 */
                 if(!empty($message) && $online_consultant->getParamFromMessage('created_at', $message)->diffInHours(Carbon::now()) < $chat_closing_time) {
                     $unanswered_script->delete();
                     return;

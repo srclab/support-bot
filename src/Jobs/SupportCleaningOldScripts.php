@@ -1,6 +1,5 @@
 <?php
 
-
 namespace SrcLab\SupportBot\Jobs;
 
 use Illuminate\Bus\Queueable;
@@ -8,9 +7,11 @@ use Illuminate\Queue\SerializesModels;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
-use SrcLab\SupportBot\SupportBotScript;
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
+use Carbon\Carbon;
+use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 
-class SupportSendingScriptMessageJob implements ShouldQueue
+class SupportCleaningOldScripts implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
@@ -28,9 +29,13 @@ class SupportSendingScriptMessageJob implements ShouldQueue
      */
     public function handle()
     {
-        /**
-         * Запуск сценария для пачки пользователей.
-         */
-        app(SupportBotScript::class)->sendStartMessageForUsers();
+        /** @var \SrcLab\SupportBot\Repositories\SupportScriptRepository; $support_script_repository */
+        $support_script_repository = app(SupportScriptRepository::class);
+
+        $scripts = $support_script_repository->getNextScriptsWeekAgo();
+
+        foreach($scripts as $script) {
+            $script->delete();
+        }
     }
 }

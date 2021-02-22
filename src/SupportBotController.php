@@ -30,6 +30,7 @@ class SupportBotController extends BaseController
      */
     public function support_bot($secret = null)
     {
+        /** @var \SrcLab\OnlineConsultant\Contracts\OnlineConsultant $online_consultant */
         $online_consultant = app(OnlineConsultant::class);
 
         $post_data = $this->request->getContent();
@@ -39,6 +40,9 @@ class SupportBotController extends BaseController
 
             $result = app(\SrcLab\SupportBot\SupportBot::class)->processWebhook(! empty($secret) ? array_merge($post_data, ['secretKey' => $secret]) : $post_data);
 
+            /**
+             * Отправка ответа для удержания чата на боте.
+             */
             if($online_consultant->getOnlineConsultantName() == 'webim' && !empty($result)) {
                 return response()->json(['result' => 'ok']);
             }

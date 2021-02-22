@@ -29,8 +29,8 @@ class SupportRedirectChatRepository extends Repository
     /**
      * Проверка существует ли запись о редиректе для чата.
      *
-     * @param $chat_id
-     * @return mixed
+     * @param int $chat_id
+     * @return bool
      */
     public function isExistRecord($chat_id)
     {

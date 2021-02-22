@@ -5,11 +5,13 @@ namespace SrcLab\SupportBot;
 use Carbon\Carbon;
 use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
+use SrcLab\SupportBot\Repositories\SupportScriptAnswerRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptExceptionRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
 use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
 use Illuminate\Support\Facades\Log;
 
+// todo: если добавятся проекты в вебим - при редиректе на оператора проверять его отдел
 class SupportBotScript
 {
     use SupportBotStatistic;
@@ -40,6 +42,11 @@ class SupportBotScript
     protected $redirect_chat_repository;
 
     /**
+     * @var \SrcLab\SupportBot\Repositories\SupportScriptAnswerRepository
+     */
+    protected $scripts_answer_repository;
+
+    /**
      * @var \Illuminate\Contracts\Cache\Repository $cache
      */
     protected $cache;
@@ -54,6 +61,7 @@ class SupportBotScript
         $this->scripts_repository = app(SupportScriptRepository::class);
         $this->scripts_exception_repository = app(SupportScriptExceptionRepository::class);
         $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
+        $this->scripts_answer_repository = app(SupportScriptAnswerRepository::class);
         $this->cache = app('cache');
     }
 
@@ -77,17 +85,18 @@ class SupportBotScript
     /**
      * Обработка сценария для пользователя если скрипт существует.
      *
-     * @param $search_id
+     * @param int $search_id
+     * @param array $data
      * @return string|bool
      */
-    public function handleScriptForUserIfExists($search_id)
+    public function handleScriptForUserIfExists($search_id, $data)
     {
         /** @var \SrcLab\SupportBot\Models\SupportScriptModel $script */
         $script = $this->scripts_repository->findBy(['search_id' => $search_id]);
 
         if(!is_null($script)) {
             if($script->step > 0) {
-                if ($this->processScript($script)) {
+                if ($this->processScript($script, $data)) {
                     return 'processing';
                 }
             } else {
@@ -105,34 +114,42 @@ class SupportBotScript
      */
     public function planningPendingScripts($search_id)
     {
-        $this->scripts_repository->addRecord($search_id, now()->addMinutes(1));
+        $this->scripts_repository->addRecord($search_id, now()->addHour($this->config['scripts']['delay_before_running']));
     }
 
     /**
      * Обработка сценария для пользователя.
      *
-     * @param $script
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @param array $data
      * @return bool
      */
-    public function processScript($script)
+    public function processScript($script, array $data)
     {
         if(empty($this->config['scripts']['clarification']['steps'][$script->step]) || $script->send_message_at > now()) {
             return false;
         }
 
-        /**
-         * Получение сообщений с пользователем.
-         *
-         */
-        $dialog = $this->online_consultant->getDialogFromClientByPeriod($script->search_id, [Carbon::now()->subDays(14), Carbon::now()->endOfDay()]);
-
-        if(empty($dialog)) {
-            return false;
-        }
-
-        $messages = $this->online_consultant->getParamFromDialog('messages', $dialog);
+        $last_message = $this->online_consultant->getParamFromDataWebhook('message_text', $data);
+        $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
 
         if($script->step == $this->config['scripts']['clarification']['final_step']) {
+
+            /**
+             * Запись комментария к преидущему ответу пользователя для статистики.
+             */
+            if(!empty($last_message)) {
+
+                /**
+                 * Поиск записи об ответе пользователя на предфинальный вопрос.
+                 */
+                $user_answer = $this->scripts_answer_repository->getLastUserAnswer($client_id);
+
+                if (!empty($user_answer)) {
+                    $user_answer->comment = $last_message;
+                    $user_answer->save();
+                }
+            }
 
             /**
              * Отправка пользователю финального сообщения сценария и деактивация сценария для пользователя.
@@ -141,27 +158,33 @@ class SupportBotScript
 
         } else {
 
-            /**
-             * Получение сообщений клиента полученных после последнего сообщения сценария.
-             */
-            $client_messages = $this->getClientMessageAfterLastScriptMessage($script, $messages);
-
-            if (!empty($client_messages)) {
-
-                $client_messages = implode('', $this->getClientMessageAfterLastScriptMessage($script, $messages));
+            if (!empty($last_message)) {
 
                 /**
-                 * Проверка сообщения отправленного пользователем на соотвествие с одним из вариантов текущего шага.
+                 * Поиск выбранного варианта ответа.
                  */
                 foreach ($this->config['scripts']['clarification']['steps'][$script->step]['variants'] as $variant) {
+                    if ($variant['button'] == $last_message) {
+                        /**
+                         * Запись ответа пользователя для статистики.
+                         */
+                        if(!$this->scripts_answer_repository->isUserAnswered($client_id, $variant)) {
+                            $user_answer = $this->scripts_answer_repository->new();
 
+                            $user_answer->client_id = $client_id;
+                            $user_answer->answer_option_id = $variant['id'];
+                            $user_answer->created_at = Carbon::now();
 
-                    if (preg_match('/' . preg_quote($variant['button']) . '/iu', $client_messages)) {
+                            $user_answer->save();
+                        }
 
                         if(!empty($variant['messages'])) {
                             $result = $variant['messages'];
                         }
 
+                        /**
+                         * Перевод пользователя на оператора.
+                         */
                         if(!empty($variant['for_operator'])) {
                             /**
                              * Установка несуществующего шага для завершения скрипта.
@@ -169,19 +192,21 @@ class SupportBotScript
                             $script->step = -1;
                             $script->save();
 
+                            /**
+                             * Отложенный перевод пользователя на оператора.
+                             */
                             if(!empty($this->config['redirect_chats']['not_working_hours']['period_begin']) && !empty($this->config['redirect_chats']['not_working_hours']['period_end']) && check_current_time($this->config['redirect_chats']['not_working_hours']['period_begin'], $this->config['redirect_chats']['not_working_hours']['period_end'])) {
-
-                                $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
                                 $this->sendMessageAndIncrementStatistic($client_id, $this->config['redirect_chats']['message_not_working_hours']);
 
                                 $this->redirect_chat_repository->addRecord($client_id);
 
                             } else {
+
                                 /**
                                  * Перенаправление пользователя.
                                  */
-                                $this->redirectUser($dialog);
+                                $this->redirectUser($client_id);
                             }
 
                             return true;
@@ -200,7 +225,7 @@ class SupportBotScript
                             $script->prev_step = $script->step;
                             $script->step = $variant['next_step'];
                             $buttons = array_column($this->config['scripts']['clarification']['steps'][$script->step]['variants'], 'button');
-                        } else{
+                        } else {
                             /**
                              * Установка следущего шага финальным.
                              */
@@ -209,21 +234,18 @@ class SupportBotScript
                         }
 
                         $script->save();
-
-                        break;
-
                     }
                 }
 
                 /**
-                 * Отправка финального сообщения в случае если сообщения пользователя не совпало ни с одним из варианта текущего шага.
+                 * Редирект на оператора в случае если сообщения пользователя не совпало ни с одним из варианта текущего шага.
                  */
                 if (empty($result)) {
 
                     /**
                      * Перенаправление пользователя.
                      */
-                    $this->redirectUser($dialog, false);
+                    $this->redirectUser($client_id, false);
 
                     /**
                      * Удаление скрипта.
@@ -236,13 +258,13 @@ class SupportBotScript
                 $message = array_pop($messages);
 
                 /**
-                 * Отправка финального сообщения в случае если сообщения пользователя было файлом.
+                 * Редирект на оператора в случае если сообщения пользователя было файлом.
                  */
                 if($message['kind'] == 'file_visitor') {
                     /**
                      * Перенаправление пользователя.
                      */
-                    $this->redirectUser($dialog, false);
+                    $this->redirectUser($client_id, false);
 
                     /**
                      * Удаление скрипта.
@@ -264,8 +286,6 @@ class SupportBotScript
                 $script->save();
             }
 
-            $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
-
             /**
              * Отправка сообщений пользователю.
              */
@@ -273,6 +293,9 @@ class SupportBotScript
                 $this->sendMessageAndIncrementStatistic($client_id, $this->replaceMultipleSpacesWithLineBreaks($message));
             }
 
+            /**
+             * Отправка кнопок пользователю.
+             */
             if(!empty($buttons)) {
                 $this->sendButtonMessageAndIncrementStatistic($client_id, $buttons);
             }
@@ -292,6 +315,30 @@ class SupportBotScript
     }
 
     /**
+     * Получение ответа клиента на вопрос на шаге.
+     *
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @param int $step
+     * @param array $client_messages
+     * @return null|array
+     */
+    public function getAnswerUserOnStep($script, $step, $client_messages)
+    {
+        $client_messages = implode('', $client_messages);
+
+        /**
+         * Поиск ответа пользователя на вопрос указанного шага.
+         */
+        foreach ($this->config['scripts']['clarification']['steps'][$step]['variants'] as $variant) {
+            if (preg_match('/' . preg_quote($variant['button']) . '/iu', $client_messages)) {
+                return $variant;
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Запуск сценария для пользователей.
      */
     public function sendStartMessageForUsers()
@@ -303,6 +350,11 @@ class SupportBotScript
             return;
         }
 
+        /**
+         * Получение пачки скриптов на запуск.
+         *
+         * @var \Illuminate\Database\Eloquent\Collection $scripts
+         */
         $scripts = $this->scripts_repository->getNextScripts();
 
         if($scripts->isEmpty()) return;
@@ -311,6 +363,41 @@ class SupportBotScript
         foreach($scripts as $script) {
             $this->startScript($script);
         }
+    }
+
+    /**
+     * Получение сообщений клиента после сообщения сценария.
+     *
+     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
+     * @param int $step
+     * @param array $messages
+     * @return bool|array
+     */
+    public function getScriptMessagesIndex($script, $step, $messages)
+    {
+        if($step > 0) {
+            foreach ($this->config['scripts']['clarification']['steps'][$step]['variants'] as $key => $variant) {
+
+                if(empty($variant['messages'])) {
+                    continue;
+                }
+
+                foreach($variant['messages'] as $message) {
+                    $select_message[] = $this->deleteControlCharactersAndSpaces(preg_quote($message, '/'));
+                }
+            }
+
+            $select_message = implode('|', $select_message);
+        } else {
+            $select_message = $this->deleteControlCharactersAndSpaces(str_replace(':client_name', '', $this->config['scripts']['clarification']['message']));
+        }
+
+        /**
+         * Поиск индекса сообщения от сценария в массиве.
+         */
+        $script_message_index = $this->online_consultant->findMessageKey("(?:{$select_message})", $this->online_consultant->findOperatorMessages($messages));
+
+        return $script_message_index ?? false;
     }
 
     //****************************************************************
@@ -356,8 +443,8 @@ class SupportBotScript
         $datetime_message_client = $this->online_consultant->getDateTimeLastMessage($dialog);
 
         /** @var \Carbon\Carbon $datetime_message_client */
-        if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < 179) {
-            $script->send_message_at = $datetime_message_client->addHours(3);
+        if(!empty($datetime_message_client) && $datetime_message_client->diffInMinutes(Carbon::now()) < ($this->config['scripts']['delay_before_running'] * 60 - 1)) {
+            $script->send_message_at = $datetime_message_client->addHours($this->config['scripts']['delay_before_running']);
             $script->save();
             return;
         }
@@ -366,11 +453,21 @@ class SupportBotScript
         $client_name = $this->online_consultant->getParamFromDialog('name', $dialog);
         $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
+        /**
+         * Запуск скрипта.
+         */
         if ($this->checkDialogScriptLaunchConditions($messages)) {
             $result = $this->insertClientNameInString($this->config['scripts']['clarification']['message'], $client_name);
             $buttons = array_column($this->config['scripts']['clarification']['steps'][1]['variants'], 'button');
 
+            /**
+             * Отправка сообщения.
+             */
             $this->sendMessageAndIncrementStatistic($client_id, $this->replaceMultipleSpacesWithLineBreaks($result));
+
+            /**
+             * Отправка кнопок.
+             */
             $this->sendButtonMessageAndIncrementStatistic($client_id, $buttons);
 
             $script->step++;
@@ -379,6 +476,9 @@ class SupportBotScript
             $script->save();
         } else {
 
+            /**
+             * Закрытие чата.
+             */
             if($this->online_consultant->isCloseChatFunction() && !$this->redirect_chat_repository->isExistRecord($client_id)) {
                 $this->online_consultant->closeChat($script->search_id);
             }
@@ -407,10 +507,16 @@ class SupportBotScript
          */
         $exceptions = $this->scripts_exception_repository->getAllException();
 
+        /**
+         * Проверка на сообщения от оператора соотвествующее условиям сценария.
+         */
         if (!preg_match( '/' . $this->config['scripts']['select_message'] . '/iu', $operator_messages)) {
             return false;
         }
 
+        /**
+         * Проверка исключений при которых скрипт реализовывать не нужно.
+         */
         foreach ($exceptions as $exception) {
 
             if (preg_match('/(?:' . addcslashes($exception->exception, "/") . ')/iu', $client_messages)) {
@@ -424,13 +530,18 @@ class SupportBotScript
     /**
      * Перенаправление пользователя на доступного оператора, либо отложенное перенаправление.
      *
-     * @param array $dialog
+     * @param int $client_id
      * @param bool $notification
      */
-    private function redirectUser(array $dialog, $notification = true)
+    private function redirectUser($client_id, $notification = true)
     {
         /**
-         * Получение разрешенных операторов.
+         * Получение диалога.
+         */
+        $dialog = $this->online_consultant->getDialogFromClientByPeriod($client_id);
+
+        /**
+         * Получение списка операторов онлайн.
          */
         $operators_ids = $this->getOnlineOperatorsListToRedirect([$this->online_consultant->getParamFromDialog('operator_id', $dialog)]);
 
@@ -438,19 +549,28 @@ class SupportBotScript
 
             $client_id = $this->online_consultant->getParamFromDialog('client_id', $dialog);
 
+            /**
+             * Отправка сообщения пользователю.
+             */
             if(!empty($notification)) {
                 $this->sendMessageAndIncrementStatistic($this->online_consultant->getParamFromDialog('client_id', $dialog), $this->config['redirect_chats']['message_not_operators']);
             }
 
+            /**
+             * Создания записи об отложенном редиректе пользователя на оператора.
+             */
             $this->redirect_chat_repository->addRecord($client_id);
 
         } else {
+            /**
+             * Редирект пользователя на оператора.
+             */
             $this->online_consultant->redirectDialogToOperator($dialog, $operators_ids[array_rand($operators_ids)]);
         }
     }
 
     /**
-     * Получение списка операторов онлайн исключая оператора диалога.
+     * Получение списка операторов онлайн с указанными исключениями.
      *
      * @param array $exclude_ids
      * @return array
@@ -460,14 +580,14 @@ class SupportBotScript
         $operators_ids = $this->online_consultant->getListOnlineOperatorsIds();
 
         /**
-         * Удаление текущего оператора со списка операторов.
+         * Исключение указанных операторов со списка.
          */
         if(!empty($exclude_ids)) {
             $operators_ids = array_diff($operators_ids, $exclude_ids);
         }
 
         /**
-         * Получение разрешенных операторов.
+         * Исключение операторов указанных в конфига со списка.
          */
         if(!empty($this->config['redirect_chats']['except_operators_ids'])) {
             $operators_ids = array_diff($operators_ids, $this->config['redirect_chats']['except_operators_ids']);
@@ -477,80 +597,10 @@ class SupportBotScript
     }
 
     /**
-     * Получить сообщения клиента после последнего отправленного сообщения сценария.
-     *
-     * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
-     * @param array $messages
-     * @return bool|array
-     */
-    private function getClientMessageAfterLastScriptMessage($script, $messages)
-    {
-        if ($script->step == 1) {
-
-            $select_message = '(?:' . $this->deleteControlCharactersAndSpaces(str_replace(':client_name', '', $this->config['scripts']['clarification']['message'])) . ')';
-
-        } else {
-
-            $select_message = '(?:';
-
-            foreach ($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants'] as $key => $variant) {
-
-                if(empty($variant['messages'])) {
-                    continue;
-                }
-
-                $variant_messages = [];
-
-                foreach($variant['messages'] as $message) {
-                    $variant_messages[] = $this->deleteControlCharactersAndSpaces(preg_quote($message));
-                }
-
-                $select_message .= implode('|', $variant_messages);
-
-                if ($key != (count($this->config['scripts']['clarification']['steps'][$script->prev_step]['variants']) - 1)) {
-                    $select_message .= '|';
-                }
-            }
-
-            $select_message .= ')';
-        }
-
-        $script_message_id = $this->online_consultant->findMessageKey($select_message, $this->online_consultant->findOperatorMessages($messages));
-
-        $client_messages = [];
-
-        if (!empty($script_message_id)) {
-
-            $messages = array_slice($messages, ($script_message_id + 2));
-
-            /**
-             * Обнуление сценария в случае если диалог подхватил оператор.
-             */
-            if(!empty($this->online_consultant->findOperatorMessages($messages))) {
-                /**
-                 * Обнуление сценария в случае если диалог подхватил оператор.
-                 */
-                $script->step = 0;
-                $script->send_message_at = Carbon::now()->addHour(3);
-                $script->user_answered = false;
-                $script->start_script_at = null;
-
-                $script->save();
-
-                return false;
-            } else {
-                $client_messages = $this->online_consultant->findClientMessages($messages);
-            }
-        }
-
-        return $client_messages;
-    }
-
-    /**
      * Получение финального сообщения для сценария и деактивация сценария.
      *
      * @param \SrcLab\SupportBot\Models\SupportScriptModel $script
-     * @return string
+     * @return array
      */
     private function getFinalMessageAndDeactivateScript($script)
     {

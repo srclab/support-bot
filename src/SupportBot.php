@@ -81,7 +81,7 @@ class SupportBot
              */
             if($this->support_bot_scripts->checkEnabledUserIds($search_id)) {
 
-                $result_handle = $this->support_bot_scripts->handleScriptForUserIfExists($search_id);
+                $result_handle = $this->support_bot_scripts->handleScriptForUserIfExists($search_id, $data);
 
                 if ($result_handle == 'processing') {
                     return true;

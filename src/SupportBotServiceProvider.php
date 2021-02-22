@@ -4,6 +4,7 @@ namespace SrcLab\SupportBot;
 
 use Illuminate\Support\ServiceProvider;
 use SrcLab\SupportBot\Commands\ClearExceptionScriptsCache;
+use SrcLab\SupportBot\Commands\ScriptProcessUserResponses;
 use SrcLab\SupportBot\Services\Messengers\TalkMe\TalkMe;
 use SrcLab\SupportBot\Services\Messengers\Webim\Webim;
 
@@ -38,7 +39,8 @@ class SupportBotServiceProvider extends ServiceProvider
          */
         if ($this->app->runningInConsole()) {
             $this->commands([
-                ClearExceptionScriptsCache::class
+                ClearExceptionScriptsCache::class,
+                ScriptProcessUserResponses::class
             ]);
         }
     }
