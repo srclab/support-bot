@@ -11,6 +11,7 @@ use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use Carbon\Carbon;
 use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
 use SrcLab\SupportBot\Repositories\SupportScriptRepository;
+use Illuminate\Support\Facades\Log;
 
 class SupportCloseChatScriptJob implements ShouldQueue
 {
