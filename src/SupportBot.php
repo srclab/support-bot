@@ -169,13 +169,6 @@ class SupportBot
         $this->sendOrPlaningMessage($client_id, $answer, $this->online_consultant->getParamFromDataWebhook('operator_login', $data));
 
         /**
-         * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
-         */
-        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $this->online_consultant->getParamFromDataWebhook('message_text', $data))) {
-            $this->messages_repository->addRecord($client_id, $this->online_consultant->getParamFromDataWebhook('operator_login', $data), 'Чем я могу вам помочь?', now()->addMinutes(2));
-        }
-
-        /**
          * Запись информации о том, что ответ уже отправлялся сегодня.
          */
         $this->writeJustSentAnswerToday($answer_index, $client_id);
