@@ -111,7 +111,10 @@ class SupportBot
         /**
          * В случае назначения чата на робота оператором прерывать метод с отдачей нужного ответа.
          */
-        if($this->online_consultant->getOnlineConsultantName() == 'webim' && $data['event'] == 'new_chat' && $this->online_consultant->getParamFromMessage('who_send', array_pop($this->getParamFromDataWebhook('messages', $data))) == 'operator') {
+        if($this->online_consultant->getOnlineConsultantName() == 'webim'
+            && $data['event'] == 'new_chat'
+            && $this->online_consultant->getParamFromMessage('who_send', array_pop($this->getParamFromDataWebhook('messages', $data))) == 'operator'
+        ) {
             return true;
         }
 
