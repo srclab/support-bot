@@ -109,6 +109,13 @@ class SupportBot
         }
 
         /**
+         * В случае назначения чата на робота оператором прерывать метод с отдачей нужного ответа.
+         */
+        if($this->online_consultant->getOnlineConsultantName() == 'webim' && $data['event'] == 'new_chat' && $this->online_consultant->getParamFromMessage('who_send', array_pop($this->getParamFromDataWebhook('messages', $data))) == 'operator') {
+            return true;
+        }
+
+        /**
          * Проверка фильтра пользователей по id на сайте.
          */
         if(!$this->online_consultant->checkEnabledUserIds($this->config['enabled_for_user_ids'], $data)) {
