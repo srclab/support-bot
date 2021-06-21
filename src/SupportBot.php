@@ -113,9 +113,12 @@ class SupportBot
          */
         if($this->online_consultant->getOnlineConsultantName() == 'webim'
             && $data['event'] == 'new_chat'
-            && $this->online_consultant->getParamFromMessage('who_send', array_pop($this->getParamFromDataWebhook('messages', $data))) == 'operator'
         ) {
-            return true;
+            $messages = $this->online_consultant->getParamFromDataWebhook('messages', $data);
+
+            if($this->online_consultant->getParamFromMessage('who_send', array_pop($messages)) == 'operator') {
+                return true;
+            }
         }
 
         /**
@@ -151,15 +154,6 @@ class SupportBot
          */
         if(!$this->checkActivePeriod()) {
             return false;
-        }
-
-        /**
-         * Удаление отложенных сообщений, если пользователь написал что-либо после приветствия.
-         */
-        if($this->config['deferred_answer_after_welcome'] ?? false) {
-            $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
-
-            $this->messages_repository->deleteDeferredMessagesByClient($client_id);
         }
 
         /**
