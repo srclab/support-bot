@@ -18,7 +18,7 @@ class SupportScriptExceptionRepository extends Repository
     protected $config;
 
     /**
-     * SupportScriptRepository constructor.
+     * SupportScriptExceptionRepository constructor.
      */
     public function __construct()
     {

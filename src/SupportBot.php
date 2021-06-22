@@ -5,20 +5,22 @@ namespace SrcLab\SupportBot;
 use Carbon\Carbon;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Log;
-use SrcLab\SupportBot\Contracts\OnlineConsultant;
+use SrcLab\OnlineConsultant\Contracts\OnlineConsultant;
 use SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository;
-use Throwable;
+use SrcLab\SupportBot\Repositories\SupportRedirectChatRepository;
+use SrcLab\SupportBot\Support\Traits\SupportBotStatistic;
 
 class SupportBot
-
 {
+    use SupportBotStatistic;
+    
     /**
      * @var \SrcLab\SupportBot\Repositories\SupportAutoAnsweringRepository
      */
     protected $messages_repository;
 
     /**
-     * @var \SrcLab\SupportBot\Contracts\OnlineConsultant
+     * @var \SrcLab\OnlineConsultant\Contracts\OnlineConsultant
      */
     protected $online_consultant;
 
@@ -38,98 +40,144 @@ class SupportBot
     protected $support_bot_scripts;
 
     /**
+     * @var \SrcLab\SupportBot\Repositories\SupportRedirectChatRepository
+     */
+    protected $redirect_chat_repository;
+
+    /**
      * SupportAutoAnswering constructor.
      */
     public function __construct()
     {
         $this->config = array_merge(config('support_bot'), app_config('support_bot'));
         $this->messages_repository = app(SupportAutoAnsweringRepository::class);
-        $this->online_consultant = app(OnlineConsultant::class, ['config' => $this->config['accounts']['talk_me']]);
+        $this->online_consultant = app(OnlineConsultant::class);
         $this->support_bot_scripts = app(SupportBotScript::class);
+        $this->redirect_chat_repository = app(SupportRedirectChatRepository::class);
         $this->cache = app('cache');
     }
 
     /**
-     * Обработка новых обращений по вебхуку.
+     * Обработка новых обращений по вебхуку. ( - )
      *
      * @param array $data
      * @throws \Psr\SimpleCache\InvalidArgumentException
      */
     public function processWebhook(array $data)
     {
-        if(!empty($this->config['scripts']['enabled']) && !empty($data['client']['searchId'])) {
+        /**
+         * Проверка полученных данных, определение возможности сформировать ответ.
+         */
+        if(!$this->online_consultant->checkWebhookDataForNewMessage($data)) {
+            return false;
+        }
+
+        $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
+
+        if(!empty($this->config['scripts']['enabled']) && !empty($search_id)) {
+
             /**
              * Планирование отложенного сценария для удержания пользователя.
              */
-            if($this->support_bot_scripts->planingOrProcessScriptForUser($data['client']['searchId'])) return;
+            if($this->support_bot_scripts->checkEnabledUserIds($search_id)) {
+
+                $result_handle = $this->support_bot_scripts->handleScriptForUserIfExists($search_id, $data);
+
+                if ($result_handle == 'processing') {
+                    return true;
+                } else {
+                    /**
+                     * Задержка чата на боте в случае если на бота чат перекинул оператор.
+                     */
+                    if ($this->online_consultant->getOnlineConsultantName() == 'webim') {
+                        if ($data['event'] == 'new_chat') {
+                            if (!$result_handle) {
+                                $this->support_bot_scripts->planningPendingScripts($search_id);
+                            }
+
+                            $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->subDays(2), Carbon::now()->endOfDay()]);
+
+                            if ($this->online_consultant->isClientRedirectedToBot($dialog)) {
+                                return true;
+                            }
+                        }
+                    } elseif (!$result_handle) {
+                        $this->support_bot_scripts->planningPendingScripts($search_id);
+                    }
+                }
+            }
+        }
+
+        /**
+         * В случае назначения чата на робота оператором прерывать метод с отдачей нужного ответа.
+         */
+        if($this->online_consultant->getOnlineConsultantName() == 'webim'
+            && $data['event'] == 'new_chat'
+        ) {
+            $messages = $this->online_consultant->getParamFromDataWebhook('messages', $data);
+
+            if($this->online_consultant->getParamFromMessage('who_send', array_pop($messages)) == 'operator') {
+                return true;
+            }
+        }
+
+        /**
+         * Проверка фильтра пользователей по id на сайте.
+         */
+        if(!$this->online_consultant->checkEnabledUserIds($this->config['enabled_for_user_ids'], $data)) {
+            return false;
+        }
+
+        /**
+         * В инстаграм не отвечать.
+         */
+        if($this->online_consultant->getOnlineConsultantName() == 'talk_me' && !empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
+            return false;
         }
 
         /**
          * Автоответчик.
          */
         if($this->autoResponder($data)) {
-            return;
+            return true;
         }
 
         /**
          * Бот отключен.
          */
         if(!$this->config['enabled']) {
-            return;
-        }
-
-        /**
-         * Проверка полученных данных, определение возможности сформировать ответ.
-         */
-        if(!$this->checkWebhookData($data)) {
-            return;
+            return false;
         }
 
         /**
          * Проверка периода активности бота.
          */
         if(!$this->checkActivePeriod()) {
-            return;
-        }
-
-        /**
-         * Удаление отложенных сообщений, если пользователь написал что-либо после приветствия.
-         */
-        if($this->config['deferred_answer_after_welcome'] ?? false) {
-            $this->messages_repository->deleteDeferredMessagesByClient($data['client']['clientId']);
+            return false;
         }
 
         /**
          * Формирование автоответа.
          */
-        list($answer_index, $answer) = $this->getAnswer($data);
+        [$answer_index, $answer] = $this->getAnswer($data);
 
         if(empty($answer)) {
-            return;
+            return false;
         }
+
+        $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
 
         /**
          * Отправка сообщения.
          */
-        $this->sendMessage($data['client']['clientId'], $answer, $data['operator']['login']);
-
-        /**
-         * Если ответ это простое приветствие, добавление отложенного сообщения "Чем я могу вам помочь?"
-         */
-        if(($this->config['deferred_answer_after_welcome'] ?? false) && preg_match('/^(?:Здравствуйте|Привет|Добрый вечер|Добрый день)[.!)\s]?$/iu', $data['message']['text'])) {
-            $this->messages_repository->addRecord($data['client']['clientId'], $data['operator']['login'], 'Чем я могу вам помочь?', now()->addMinutes(2));
-        }
-
-        /**
-         * Увеличение счетчика отправленных сообщений для статистики.
-         */
-        $this->sentMessagesAnalyse();
+        $this->sendOrPlaningMessage($client_id, $answer, $this->online_consultant->getParamFromDataWebhook('operator_login', $data));
 
         /**
          * Запись информации о том, что ответ уже отправлялся сегодня.
          */
-        $this->writeJustSentAnswerToday($answer_index, $data['client']['clientId']);
+        $this->writeJustSentAnswerToday($answer_index, $client_id);
 
+        return true;
     }
 
     /**
@@ -159,7 +207,7 @@ class SupportBot
          * Отправка сообщений.
          */
         foreach ($messages as $message) {
-            $this->online_consultant->sendMessage($message->client_id, $message->message, $message->operator);
+            $this->sendMessageAndIncrementStatistic($message->client_id, $message->message, $message->operator);
         }
     }
 
@@ -187,13 +235,11 @@ class SupportBot
          */
         $cache_days = $cache_days > 14 ? 14 : $cache_days;
 
-        $filter = [
-            'period' => [now()->subDays($cache_days-1)->startOfDay(), Carbon::now()->endOfDay()],
-        ];
+        $period = [now()->subDays($cache_days-1)->startOfDay(), Carbon::now()->endOfDay()];
 
-        $messages = $this->online_consultant->getMessages($filter);
+        $dialogs = $this->online_consultant->getDialogsByPeriod($period);
 
-        if(empty($messages)) {
+        if(empty($dialogs)) {
             Log::error('[SrcLab\SupportBot] Не удалось получить сообщения для составления статистики отпраки.');
             return [];
         }
@@ -201,15 +247,7 @@ class SupportBot
         /**
          * Подсчет и добавление общего количества сообщений от менеджеров по дням.
          */
-        $messages = array_reduce(Arr::pluck($messages, 'messages'), 'array_merge', []);
-
-        $messages = collect($messages);
-
-        $messages = $messages->where('whoSend', 'operator');
-
-        $messages_by_days = $messages->groupBy(function ($value, $key) {
-            return Carbon::parse($value['dateTime'])->toDateString();
-        });
+        $messages_by_days = $this->online_consultant->findOperatorMessagesAndGroupBySentAt($dialogs);
 
         $result_data = [];
 
@@ -242,7 +280,7 @@ class SupportBot
          */
         $answers = $this->config['auto_answers'];
 
-        $message = $data['message']['text'];
+        $message = $this->online_consultant->getParamFromDataWebhook('message_text', $data);
         $result_answer = '';
         $answer_index = -1;
         $default_result = [-1, ''];
@@ -265,7 +303,9 @@ class SupportBot
         /**
          * Если сегодня уже отправляли такой ответ.
          */
-        if($this->isJustSentAnswerToday($answer_index, $data['client']['clientId'])) {
+        $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
+
+        if($this->isJustSentAnswerToday($answer_index, $client_id)) {
             return $default_result;
         }
 
@@ -325,55 +365,7 @@ class SupportBot
             return true;
         }
 
-        return $this->checkCurrentTime($period['day_beginning'], $period['day_end']);
-    }
-
-    /**
-     * Проверка полученных данных в вебхуке, определение возможности сформировать ответ.
-     *
-     * @param array $data
-     * @param bool $check_operator
-     * @return bool
-     */
-    protected function checkWebhookData(array $data, $check_operator = true)
-    {
-        /**
-         * Проверка секретки.
-         */
-        if(!$this->online_consultant->checkSecret($data['secretKey'] ?? null)) {
-            Log::warning('[SrcLab\SupportBot] Получен неверный секретный ключ.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка наличия сообщения.
-         */
-        if(empty($data['message'])) {
-            Log::error('[SrcLab\SupportBot] Сообщение не получено.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка наличия оператора.
-         */
-        if($check_operator && empty($data['operator']['login'])) {
-            Log::error('[SrcLab\SupportBot] Не найден оператор.', $data);
-            return false;
-        }
-
-        /**
-         * Проверка фильтра пользователей по id на сайте.
-         */
-        $only_user_ids = $this->config['enabled_for_user_ids'] ?? [];
-
-        if(!empty($only_user_ids)
-            && (empty($data['client']['customData']['user_id'])
-                || !in_array($data['client']['customData']['user_id'], $only_user_ids))
-        ) {
-            return false;
-        }
-
-        return true;
+        return check_current_time($period['day_beginning'], $period['day_end']);
     }
 
     /**
@@ -383,9 +375,11 @@ class SupportBot
      * @return bool
      * @throws \Psr\SimpleCache\InvalidArgumentException
      */
-    public function alreadySaidHello(array $data)
+    protected function alreadySaidHello(array $data)
     {
-        $cache_key = 'SupportBot:AlreadySaidHello:'.$data['client']['searchId'];
+        $search_id = $this->online_consultant->getParamFromDataWebhook('search_id', $data);
+
+        $cache_key = 'SupportBot:AlreadySaidHello:'.$search_id;
 
         /**
          * В кеше есть запись о том, что сегодня уже здоровались.
@@ -397,25 +391,17 @@ class SupportBot
         /**
          * Получение сообщений за сегодняшний день и поиск приветствия с нашей стороны.
          */
-        $filter = [
-            'period' => [Carbon::now()->startOfDay(), Carbon::now()->endOfDay()],
-            'client' => [
-                'searchId' => $data['client']['searchId'],
-            ]
-        ];
+        $dialog = $this->online_consultant->getDialogFromClientByPeriod($search_id, [Carbon::now()->startOfDay(), Carbon::now()->endOfDay()]);
+        $today_operator_messages = $this->online_consultant->findOperatorMessages($this->online_consultant->getParamFromDialog('messages', $dialog));
 
-        $today_messages = $this->online_consultant->getMessages($filter);
-
-        if(empty($today_messages)) {
+        if(empty($today_operator_messages)) {
             $this->cache->set($cache_key, 1, now()->endOfDay());
             return false;
         }
 
-        foreach ($today_messages as $case) {
-            foreach ($case['messages'] as $message) {
-                if($message['whoSend'] != 'client' && preg_match('/(?:Здравствуйте|Добрый день|Доброе утро|Добрый вечер)/iu', $message['text'])) {
-                    return true;
-                }
+        foreach ($today_operator_messages as $message) {
+            if(preg_match('/(?:Здравствуйте|Добрый день|Доброе утро|Добрый вечер)/iu', $message)) {
+                return true;
             }
         }
 
@@ -428,70 +414,16 @@ class SupportBot
     }
 
     /**
-     * Увеличение счетчика отправленных сообщений для статистики.
-     */
-    protected function sentMessagesAnalyse()
-    {
-        try {
-
-            /**
-             * Анализ сообщений отключен.
-             */
-            if (!$this->config['sent_messages_analyse']['enabled']) {
-                return;
-            }
-
-            /**
-             * Получение данных из кеша.
-             */
-            $cache_key = 'SupportBot:SentMessagesByDays';
-            $cache_days = $this->config['sent_messages_analyse']['cache_days'];
-
-            $data = $this->cache->get($cache_key, []);
-
-            /**
-             * Проход по дням, удаление старой информации.
-             */
-            if (!empty($data)) {
-
-                $date_border = now()->subDays($cache_days)->toDateString();
-
-                foreach ($data as $date => $count) {
-                    if ($date < $date_border) {
-                        unset($data[$date]);
-                    }
-                }
-
-            }
-
-            /**
-             * Инкремент счетчика текущего дня.
-             */
-            $current_date = now()->toDateString();
-
-            $data[$current_date] = ($data[$current_date] ?? 0) + 1;
-
-            /**
-             * Сохранение данных.
-             */
-            $this->cache->set($cache_key, $data, now()->addDays($cache_days));
-
-        } catch (Throwable $e) {
-            Log::error('[SrcLab\SupportBot] Ошибка анализатора отправленных сообщений');
-        }
-    }
-
-    /**
      * Добавление ответа в очередь на отправку или мгновенная отправка на основании текущего режима работы.
      *
      * @param int $client_id
      * @param string $message
-     * @param string $operator
+     * @param null|string $operator
      */
-    protected function sendMessage($client_id, $message, $operator)
+    protected function sendOrPlaningMessage($client_id, $message, $operator = null)
     {
         if($this->config['answering_mode'] == 'sync') {
-            $this->online_consultant->sendMessage($client_id, $message, $operator);
+            $this->sendMessageAndIncrementStatistic($client_id, $message, $operator);
         } else {
             $this->messages_repository->addRecord($client_id, $operator, $message);
         }
@@ -505,11 +437,11 @@ class SupportBot
      */
     protected function autoResponder(array $data)
     {
+        $auto_responder_config = $this->config['auto_responder'];
+
         /**
          * Автоответчик выключен.
          */
-        $auto_responder_config = $this->config['auto_responder'];
-
         if(empty($auto_responder_config['enabled'])) {
             return false;
         }
@@ -521,14 +453,14 @@ class SupportBot
             return false;
         }
 
-        if(!$this->checkCurrentTime($auto_responder_config['period_begin'], $auto_responder_config['period_end'])) {
+        if(!check_current_time($auto_responder_config['period_begin'], $auto_responder_config['period_end'])) {
             return false;
         }
 
         /**
          * Проверка полученных данных, определение возможности сформировать ответ.
          */
-        if(!$this->checkWebhookData($data, false) || empty($auto_responder_config['message'])) {
+        if(empty($auto_responder_config['message'])) {
             return false;
         }
 
@@ -540,21 +472,16 @@ class SupportBot
         }
 
         /**
-         * В инстаграм не отвечать.
-         */
-        if(!empty($data['client']['source']['type']['id']) && $data['client']['source']['type']['id'] == 'instagram') {
-            return true;
-        }
-
-        /**
          * Сегодня уже был отправлен автоответ.
          */
         $cache_key = 'SupportBot:TodayJustSentAutoRespond';
 
         $just_sent_clients = $this->cache->get($cache_key, []);
 
-        if(!empty($just_sent_clients[$data['client']['clientId']])) {
-            return true;
+        $client_id = $this->online_consultant->getParamFromDataWebhook('client_id', $data);
+
+        if(!empty($just_sent_clients[$client_id])) {
+            return false;
         }
 
         /**
@@ -562,12 +489,17 @@ class SupportBot
          */
         $operator = empty($data['operator']['login']) || $data['operator']['login'] == 'Offline' ? null : $data['operator']['login'];
 
-        $this->sendMessage($data['client']['clientId'], $auto_responder_config['message'], $operator);
+        $this->sendOrPlaningMessage($client_id, $auto_responder_config['message'], $operator);
+
+        /**
+         * Отложенный редирект пользователя в рабочее время.
+         */
+        $this->redirect_chat_repository->addRecord($client_id);
 
         /**
          * Отметка что сегодня уже был отправлен автоответ.
          */
-        $just_sent_clients[$data['client']['clientId']] = true;
+        $just_sent_clients[$client_id] = true;
         $this->cache->set($cache_key, $just_sent_clients, Carbon::createFromFormat('H:i', $auto_responder_config['period_end'])->addDays(now()->hour > 12 ? 1 : 0));
 
         return true;
@@ -602,23 +534,4 @@ class SupportBot
 
         $this->cache->set($cache_key, $sent_today, now()->endOfDay()->addHours(3));
     }
-
-    /**
-     * Проверка, что текущее время содержится в указанном интервале.
-     *
-     * @param string $time_begin
-     * @param string $time_end
-     * @return bool
-     */
-    protected function checkCurrentTime($time_begin, $time_end)
-    {
-        $now_time = now()->format('H:i');
-
-        if($time_begin > $time_end) {
-            return !($now_time < $time_begin && $now_time > $time_end);
-        }
-
-        return $now_time >= $time_begin && $now_time <= $time_end;
-    }
-
 }

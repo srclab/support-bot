@@ -4,17 +4,14 @@ namespace SrcLab\SupportBot\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class SupportScriptModel extends Model
+class SupportScriptAnswerModel extends Model
 {
     public $timestamps = false;
 
-    protected $dates = [
-        'send_message_at',
-        'start_script_at'
-    ];
+    protected $dates = ['created_at'];
 
     /**
-     * SupportScriptModel constructor.
+     * SupportScriptAnswerModel constructor.
      *
      * @param array $attributes
      */
@@ -25,6 +22,6 @@ class SupportScriptModel extends Model
         /**
          * Определение названия таблицы.
          */
-        $this->table = app_config('support_bot.scripts')['table_name'];
+        $this->table = app_config('support_bot.scripts.answers_table_name');
     }
 }

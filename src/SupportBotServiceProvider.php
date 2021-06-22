@@ -4,6 +4,9 @@ namespace SrcLab\SupportBot;
 
 use Illuminate\Support\ServiceProvider;
 use SrcLab\SupportBot\Commands\ClearExceptionScriptsCache;
+use SrcLab\SupportBot\Commands\ScriptProcessUserResponses;
+use SrcLab\SupportBot\Services\Messengers\TalkMe\TalkMe;
+use SrcLab\SupportBot\Services\Messengers\Webim\Webim;
 
 class SupportBotServiceProvider extends ServiceProvider
 {
@@ -31,22 +34,14 @@ class SupportBotServiceProvider extends ServiceProvider
          */
         $this->loadRoutesFrom(__DIR__.'/routes.php');
 
+        /**
+         * Команды.
+         */
         if ($this->app->runningInConsole()) {
             $this->commands([
-                ClearExceptionScriptsCache::class
+                ClearExceptionScriptsCache::class,
+                ScriptProcessUserResponses::class
             ]);
         }
-
     }
-
-    /**
-     * Register the service provider.
-     *
-     * @return void
-     */
-    public function register()
-    {
-        $this->app->singleton(\SrcLab\SupportBot\Contracts\OnlineConsultant::class, \SrcLab\SupportBot\Services\TalkMe\TalkMe::class);
-    }
-
 }
