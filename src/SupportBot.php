@@ -116,7 +116,7 @@ class SupportBot
         ) {
             $messages = $this->online_consultant->getParamFromDataWebhook('messages', $data);
 
-            if($this->online_consultant->getParamFromMessage('who_send', array_pop($messages)) == 'operator') {
+            if (!empty($messages) && $this->online_consultant->getParamFromMessage('who_send', array_pop($messages)) == 'operator') {
                 return true;
             }
         }
